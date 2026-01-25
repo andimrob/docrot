@@ -136,7 +136,7 @@ freshness:
 	}
 }
 
-func TestInitCommand_DryRun(t *testing.T) {
+func TestAddFrontmatterCommand_DryRun(t *testing.T) {
 	tmpDir := t.TempDir()
 	docDir := filepath.Join(tmpDir, "doc")
 	os.MkdirAll(docDir, 0755)
@@ -153,9 +153,9 @@ Some content.
 	os.Stdout = w
 
 	configPath = ""
-	dryRun = true
+	addFrontmatterDryRun = true
 
-	err := runInit(nil, []string{tmpDir})
+	err := runAddFrontmatter(nil, []string{tmpDir})
 
 	w.Close()
 	os.Stdout = oldStdout
@@ -165,7 +165,7 @@ Some content.
 	output := buf.String()
 
 	if err != nil {
-		t.Errorf("runInit() error = %v", err)
+		t.Errorf("runAddFrontmatter() error = %v", err)
 	}
 
 	if !strings.Contains(output, "Would add frontmatter") {
@@ -176,6 +176,79 @@ Some content.
 	content, _ := os.ReadFile(docPath)
 	if strings.Contains(string(content), "freshness") {
 		t.Error("Dry run should not modify files")
+	}
+}
+
+func TestInitCommand_CreatesConfigFile(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	oldWd, _ := os.Getwd()
+	os.Chdir(tmpDir)
+	defer os.Chdir(oldWd)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := runInit(nil, []string{})
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+
+	if err != nil {
+		t.Errorf("runInit() error = %v", err)
+	}
+
+	// Verify config file was created
+	configPath := filepath.Join(tmpDir, ".docrot.yml")
+	content, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("Config file not created: %v", err)
+	}
+
+	contentStr := string(content)
+	if !strings.Contains(contentStr, "patterns:") {
+		t.Errorf("Config should contain patterns, got: %s", contentStr)
+	}
+	if !strings.Contains(contentStr, "defaults:") {
+		t.Errorf("Config should contain defaults section, got: %s", contentStr)
+	}
+}
+
+func TestInitCommand_DoesNotOverwriteExisting(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	oldWd, _ := os.Getwd()
+	os.Chdir(tmpDir)
+	defer os.Chdir(oldWd)
+
+	// Create existing config
+	existingConfig := "# My existing config\npatterns:\n  - custom/*.md\n"
+	os.WriteFile(filepath.Join(tmpDir, ".docrot.yml"), []byte(existingConfig), 0644)
+
+	oldStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stderr = w
+
+	err := runInit(nil, []string{})
+
+	w.Close()
+	os.Stderr = oldStderr
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+
+	if err == nil {
+		t.Error("runInit() should return error when config exists")
+	}
+
+	// Verify config file was not overwritten
+	content, _ := os.ReadFile(filepath.Join(tmpDir, ".docrot.yml"))
+	if string(content) != existingConfig {
+		t.Errorf("Config should not be overwritten, got: %s", string(content))
 	}
 }
 
@@ -215,7 +288,7 @@ func TestGetWorkers_ZeroMeansDefault(t *testing.T) {
 	}
 }
 
-func TestInitCommand_MergesWithExistingFrontmatter(t *testing.T) {
+func TestAddFrontmatterCommand_MergesWithExistingFrontmatter(t *testing.T) {
 	tmpDir := t.TempDir()
 	docDir := filepath.Join(tmpDir, "doc")
 	os.MkdirAll(docDir, 0755)
@@ -235,11 +308,11 @@ Some content.
 	os.WriteFile(docPath, []byte(doc), 0644)
 
 	configPath = ""
-	dryRun = false
-	initStrategy = "interval"
-	initInterval = "90d"
+	addFrontmatterDryRun = false
+	addFrontmatterStrategy = "interval"
+	addFrontmatterInterval = "90d"
 
-	err := runInit(nil, []string{tmpDir})
+	err := runAddFrontmatter(nil, []string{tmpDir})
 	if err != nil {
 		t.Errorf("runInit() error = %v", err)
 	}
