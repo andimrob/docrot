@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"strings"
@@ -93,25 +94,71 @@ func runInit(cmd *cobra.Command, args []string) error {
 }
 
 func addFrontmatter(path, date, strategy, interval string) error {
-	content, err := os.ReadFile(path)
+	file, err := os.Open(path)
 	if err != nil {
 		return err
 	}
+	defer file.Close()
 
-	frontmatter := fmt.Sprintf(`---
-freshness:
-  last_reviewed: "%s"
-  strategy: %s
-  interval: %s
----
+	scanner := bufio.NewScanner(file)
+	var lines []string
+	var frontmatterLines []string
+	inFrontmatter := false
+	hasFrontmatter := false
+	frontmatterClosed := false
 
-`, date, strategy, interval)
+	for scanner.Scan() {
+		line := scanner.Text()
 
-	// Remove strategy-specific fields if not applicable
-	if strategy != "interval" {
-		frontmatter = strings.Replace(frontmatter, fmt.Sprintf("  interval: %s\n", interval), "", 1)
+		if !hasFrontmatter && line == "---" && !inFrontmatter {
+			inFrontmatter = true
+			hasFrontmatter = true
+			continue
+		}
+
+		if inFrontmatter && line == "---" {
+			inFrontmatter = false
+			frontmatterClosed = true
+			continue
+		}
+
+		if inFrontmatter {
+			frontmatterLines = append(frontmatterLines, line)
+		} else {
+			lines = append(lines, line)
+		}
 	}
 
-	newContent := frontmatter + string(content)
-	return os.WriteFile(path, []byte(newContent), 0644)
+	if err := scanner.Err(); err != nil {
+		return err
+	}
+
+	// Build the freshness block
+	freshnessBlock := fmt.Sprintf("freshness:\n  last_reviewed: \"%s\"\n  strategy: %s", date, strategy)
+	if strategy == "interval" {
+		freshnessBlock += fmt.Sprintf("\n  interval: %s", interval)
+	}
+
+	// Build new content
+	var newContent strings.Builder
+	newContent.WriteString("---\n")
+
+	if hasFrontmatter && frontmatterClosed {
+		// Merge with existing frontmatter
+		for _, line := range frontmatterLines {
+			newContent.WriteString(line)
+			newContent.WriteString("\n")
+		}
+	}
+
+	newContent.WriteString(freshnessBlock)
+	newContent.WriteString("\n---\n")
+
+	// Add rest of content
+	for _, line := range lines {
+		newContent.WriteString(line)
+		newContent.WriteString("\n")
+	}
+
+	return os.WriteFile(path, []byte(newContent.String()), 0644)
 }
