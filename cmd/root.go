@@ -1,0 +1,46 @@
+package cmd
+
+import (
+	"os"
+
+	"github.com/spf13/cobra"
+)
+
+var (
+	configPath string
+	format     string
+	workers    int
+)
+
+var rootCmd = &cobra.Command{
+	Use:   "docrot",
+	Short: "Detect stale documentation",
+	Long: `docrot checks documentation files for staleness based on frontmatter configuration.
+
+It supports multiple freshness strategies:
+  - interval: Doc expires after a specified duration since last review
+  - until_date: Doc expires on a specific date
+  - code_changes: Doc expires when related code files change`,
+}
+
+func Execute() {
+	err := rootCmd.Execute()
+	if err != nil {
+		os.Exit(1)
+	}
+}
+
+func init() {
+	rootCmd.PersistentFlags().StringVarP(&configPath, "config", "c", ".docrot.yml", "Path to config file")
+	rootCmd.PersistentFlags().StringVarP(&format, "format", "f", "text", "Output format: text, json")
+	rootCmd.PersistentFlags().IntVarP(&workers, "workers", "w", 0, "Number of parallel workers (0 = use CPU count)")
+}
+
+// getWorkers returns the number of workers to use.
+// CLI flag takes precedence over config file. 0 means use CPU count.
+func getWorkers(configWorkers int) int {
+	if workers > 0 {
+		return workers
+	}
+	return configWorkers
+}
