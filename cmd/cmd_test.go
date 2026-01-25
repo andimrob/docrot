@@ -215,6 +215,63 @@ func TestGetWorkers_ZeroMeansDefault(t *testing.T) {
 	}
 }
 
+func TestInitCommand_MergesWithExistingFrontmatter(t *testing.T) {
+	tmpDir := t.TempDir()
+	docDir := filepath.Join(tmpDir, "doc")
+	os.MkdirAll(docDir, 0755)
+
+	// Create doc with existing frontmatter but no freshness
+	doc := `---
+title: My Document
+author: Jane Doe
+tags:
+  - api
+  - docs
+---
+# My Doc
+Some content.
+`
+	docPath := filepath.Join(docDir, "test.md")
+	os.WriteFile(docPath, []byte(doc), 0644)
+
+	configPath = ""
+	dryRun = false
+	initStrategy = "interval"
+	initInterval = "90d"
+
+	err := runInit(nil, []string{tmpDir})
+	if err != nil {
+		t.Errorf("runInit() error = %v", err)
+	}
+
+	content, _ := os.ReadFile(docPath)
+	contentStr := string(content)
+
+	// Should have freshness added
+	if !strings.Contains(contentStr, "freshness:") {
+		t.Errorf("File should contain freshness block, got: %s", contentStr)
+	}
+
+	// Should preserve existing frontmatter
+	if !strings.Contains(contentStr, "title: My Document") {
+		t.Errorf("File should preserve title, got: %s", contentStr)
+	}
+	if !strings.Contains(contentStr, "author: Jane Doe") {
+		t.Errorf("File should preserve author, got: %s", contentStr)
+	}
+
+	// Should have exactly one frontmatter block (count --- occurrences)
+	delimCount := strings.Count(contentStr, "---")
+	if delimCount != 2 {
+		t.Errorf("File should have exactly 2 --- delimiters (one frontmatter block), got %d: %s", delimCount, contentStr)
+	}
+
+	// Content should still be there
+	if !strings.Contains(contentStr, "# My Doc") {
+		t.Errorf("File should preserve content, got: %s", contentStr)
+	}
+}
+
 func TestReviewCommand_UpdatesDate(t *testing.T) {
 	tmpDir := t.TempDir()
 
