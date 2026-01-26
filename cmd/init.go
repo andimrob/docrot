@@ -28,7 +28,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	config := `# docrot configuration
-# See: https://github.com/betterment/docrot
+# See: https://github.com/andimrob/docrot
 
 patterns:
   - "**/doc/**/*.md"

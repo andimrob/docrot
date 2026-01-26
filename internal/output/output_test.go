@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/betterment/docrot/internal/freshness"
+	"github.com/andimrob/docrot/internal/freshness"
 )
 
 func TestTextFormatter_SingleResult(t *testing.T) {

@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/betterment/docrot/internal/config"
-	"github.com/betterment/docrot/internal/document"
-	"github.com/betterment/docrot/internal/scanner"
+	"github.com/andimrob/docrot/internal/config"
+	"github.com/andimrob/docrot/internal/document"
+	"github.com/andimrob/docrot/internal/scanner"
 	"github.com/spf13/cobra"
 )
 
