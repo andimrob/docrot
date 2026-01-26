@@ -1,6 +1,6 @@
 package main
 
-import "github.com/betterment/docrot/cmd"
+import "github.com/andimrob/docrot/cmd"
 
 func main() {
 	cmd.Execute()

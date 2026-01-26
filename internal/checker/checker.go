@@ -5,9 +5,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/betterment/docrot/internal/document"
-	"github.com/betterment/docrot/internal/freshness"
-	"github.com/betterment/docrot/internal/git"
+	"github.com/andimrob/docrot/internal/document"
+	"github.com/andimrob/docrot/internal/freshness"
+	"github.com/andimrob/docrot/internal/git"
 )
 
 // parsedDoc holds a parsed document and any parse error

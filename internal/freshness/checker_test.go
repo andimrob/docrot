@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/betterment/docrot/internal/document"
-	"github.com/betterment/docrot/internal/git"
+	"github.com/andimrob/docrot/internal/document"
+	"github.com/andimrob/docrot/internal/git"
 )
 
 func TestCheck_IntervalStrategy_Fresh(t *testing.T) {

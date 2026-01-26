@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/betterment/docrot/internal/freshness"
+	"github.com/andimrob/docrot/internal/freshness"
 )
 
 // Formatter defines the interface for output formatting

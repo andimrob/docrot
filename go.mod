@@ -1,4 +1,4 @@
-module github.com/betterment/docrot
+module github.com/andimrob/docrot
 
 go 1.25.6
 

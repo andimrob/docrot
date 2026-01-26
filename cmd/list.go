@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/betterment/docrot/internal/checker"
-	"github.com/betterment/docrot/internal/config"
-	"github.com/betterment/docrot/internal/git"
-	"github.com/betterment/docrot/internal/output"
-	"github.com/betterment/docrot/internal/scanner"
+	"github.com/andimrob/docrot/internal/checker"
+	"github.com/andimrob/docrot/internal/config"
+	"github.com/andimrob/docrot/internal/git"
+	"github.com/andimrob/docrot/internal/output"
+	"github.com/andimrob/docrot/internal/scanner"
 	"github.com/spf13/cobra"
 )
 

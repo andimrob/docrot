@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/betterment/docrot/internal/document"
-	"github.com/betterment/docrot/internal/git"
+	"github.com/andimrob/docrot/internal/document"
+	"github.com/andimrob/docrot/internal/git"
 )
 
 // DefaultWatchPatterns are the default file patterns to watch for code_changes strategy
