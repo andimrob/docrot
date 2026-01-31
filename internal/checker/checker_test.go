@@ -21,7 +21,7 @@ func TestRunParallel_ProcessesAllFiles(t *testing.T) {
 	// Create multiple docs
 	for i := 0; i < 10; i++ {
 		content := `---
-freshness:
+docrot:
   last_reviewed: "2026-01-20"
   strategy: interval
   interval: 90d
@@ -59,7 +59,7 @@ func TestRunParallel_FasterThanSequential(t *testing.T) {
 	numDocs := 50
 	for i := 0; i < numDocs; i++ {
 		content := `---
-freshness:
+docrot:
   last_reviewed: "2026-01-20"
   strategy: interval
   interval: 90d
