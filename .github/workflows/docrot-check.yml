@@ -161,7 +161,8 @@ jobs:
                   repo: context.repo.repo,
                   title: title,
                   body: body,
-                  labels: ['documentation', 'stale-docs']
+                  labels: ['documentation', 'stale-docs'],
+                  assignees: ['copilot']
                 });
               }
             }
