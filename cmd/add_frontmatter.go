@@ -133,8 +133,8 @@ func addFrontmatter(path, date, strategy, interval string) error {
 		return err
 	}
 
-	// Build the freshness block
-	freshnessBlock := fmt.Sprintf("freshness:\n  last_reviewed: \"%s\"\n  strategy: %s", date, strategy)
+	// Build the docrot block
+	freshnessBlock := fmt.Sprintf("docrot:\n  last_reviewed: \"%s\"\n  strategy: %s", date, strategy)
 	if strategy == "interval" {
 		freshnessBlock += fmt.Sprintf("\n  interval: %s", interval)
 	}
