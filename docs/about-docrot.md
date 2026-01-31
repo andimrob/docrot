@@ -45,7 +45,7 @@ Documents expire on a specific calendar date. This is useful for time-sensitive 
 ```yaml
 ---
 freshness:
-  last_reviewed: "2026-01-31"
+  last_reviewed: "2024-01-15"
   strategy: until_date
   expires: "2024-06-01"
 ---
