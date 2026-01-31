@@ -3,9 +3,9 @@ freshness:
   strategy: code_changes
   last_reviewed: "2020-01-01"
   watch:
-    - "**/*.go"
+    - "cmd/**/*.go"
 ---
 
-# What is Docrot?
+# CLI Commands
 
-TODO: Explain what docrot does.
+TODO: Document the available CLI commands.
