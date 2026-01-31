@@ -98,7 +98,7 @@ Doc expires after a specified duration since last review:
 
 ```yaml
 ---
-freshness:
+docrot:
   last_reviewed: "2024-01-15"
   strategy: interval
   interval: 90d  # Supports: 30d, 12w, 3m, 1y
@@ -111,7 +111,7 @@ Doc expires on a specific date:
 
 ```yaml
 ---
-freshness:
+docrot:
   last_reviewed: "2024-01-15"
   strategy: until_date
   expires: "2024-06-01"
@@ -124,7 +124,7 @@ Doc expires when related code files change:
 
 ```yaml
 ---
-freshness:
+docrot:
   last_reviewed: "2024-01-15"
   strategy: code_changes
   watch:

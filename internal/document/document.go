@@ -23,7 +23,7 @@ type Freshness struct {
 }
 
 type frontmatterWrapper struct {
-	Freshness *Freshness `yaml:"freshness"`
+	Freshness *Freshness `yaml:"docrot"`
 }
 
 func Parse(path string) (*Document, error) {
