@@ -1,0 +1,165 @@
+name: Documentation Freshness Check
+
+on:
+  push:
+  # schedule:
+  #   # Run weekly on Monday at 9am UTC
+  #   - cron: '0 9 * * 1'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run - only report stale docs without creating issues'
+        required: false
+        default: 'false'
+        type: boolean
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  DOCROT_VERSION: 'v0.1.0'
+
+jobs:
+  check-documentation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history needed for code_changes strategy
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Install Docrot
+        run: |
+          go install github.com/andimrob/docrot@${{ env.DOCROT_VERSION }}
+
+      - name: Run Docrot check
+        id: docrot
+        run: |
+          set +e  # Don't exit on error - we expect exit code 1 for stale docs
+          docrot check --format json > docrot-output.json 2> docrot-stderr.txt
+          exit_code=$?
+          set -e
+
+          echo "exit_code=$exit_code" >> $GITHUB_OUTPUT
+
+          # Show any stderr output
+          if [ -s docrot-stderr.txt ]; then
+            echo "::warning::Docrot stderr output:"
+            cat docrot-stderr.txt
+          fi
+
+          if [ $exit_code -eq 2 ]; then
+            echo "::error::Docrot configuration error"
+            cat docrot-stderr.txt
+            exit 2
+          fi
+
+          cat docrot-output.json
+
+      - name: Process stale documents
+        if: steps.docrot.outputs.exit_code == '1'
+        uses: actions/github-script@v7
+        env:
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+        with:
+          script: |
+            const fs = require('fs');
+            const output = JSON.parse(fs.readFileSync('docrot-output.json', 'utf8'));
+
+            const staleDocs = output.docs.filter(doc => doc.status === 'stale');
+
+            if (staleDocs.length === 0) {
+              console.log('No stale documents found');
+              return;
+            }
+
+            console.log(`Found ${staleDocs.length} stale document(s)`);
+
+            // Get existing issues with our label to avoid duplicates
+            const existingIssues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: 'documentation,stale-docs',
+              state: 'open'
+            });
+
+            const existingPaths = new Set(
+              existingIssues.data
+                .map(issue => {
+                  const match = issue.body?.match(/\*\*File:\*\* `([^`]+)`/);
+                  return match ? match[1] : null;
+                })
+                .filter(Boolean)
+            );
+
+            for (const doc of staleDocs) {
+              if (existingPaths.has(doc.path)) {
+                console.log(`Skipping ${doc.path} - issue already exists`);
+                continue;
+              }
+
+              const title = `📄 Documentation needs review: ${doc.path}`;
+
+              let body = `## Documentation Recertification Required\n\n`;
+              body += `**File:** \`${doc.path}\`\n`;
+              body += `**Status:** ${doc.status}\n`;
+              body += `**Strategy:** ${doc.strategy}\n`;
+              body += `**Last Reviewed:** ${doc.last_reviewed || 'Unknown'}\n`;
+
+              if (doc.stale_since) {
+                body += `**Stale Since:** ${doc.stale_since}\n`;
+              }
+              if (doc.expires) {
+                body += `**Expired On:** ${doc.expires}\n`;
+              }
+              if (doc.reason) {
+                body += `**Reason:** ${doc.reason}\n`;
+              }
+
+              body += `\n---\n\n`;
+              body += `### Action Required\n\n`;
+              body += `Please review and update this documentation file. Once reviewed:\n\n`;
+              body += `1. Make any necessary updates to the content\n`;
+              body += `2. Run \`docrot review ${doc.path}\` to update the review date\n`;
+              body += `3. Commit the changes\n\n`;
+              body += `---\n`;
+              body += `*This issue was automatically created by the Documentation Freshness Check workflow.*`;
+
+              if (process.env.DRY_RUN === 'true') {
+                console.log(`[DRY RUN] Would create issue for: ${doc.path}`);
+                console.log(`Title: ${title}`);
+                console.log(`Body:\n${body}\n`);
+              } else {
+                console.log(`Creating issue for: ${doc.path}`);
+                await github.rest.issues.create({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  title: title,
+                  body: body,
+                  labels: ['documentation', 'stale-docs']
+                });
+              }
+            }
+
+            // Create summary
+            const summary = `## Documentation Freshness Summary\n\n` +
+              `| Metric | Count |\n` +
+              `|--------|-------|\n` +
+              `| Total Documents | ${output.summary.total} |\n` +
+              `| Fresh | ${output.summary.fresh} |\n` +
+              `| Stale | ${output.summary.stale} |\n` +
+              `| Missing Frontmatter | ${output.summary.missing_frontmatter} |\n`;
+
+            await core.summary.addRaw(summary).write();
+
+      - name: Report success
+        if: steps.docrot.outputs.exit_code == '0'
+        run: |
+          echo "## ✅ All documentation is fresh!" >> $GITHUB_STEP_SUMMARY
+          cat docrot-output.json | jq -r '.summary | "- Total: \(.total)\n- Fresh: \(.fresh)"' >> $GITHUB_STEP_SUMMARY
