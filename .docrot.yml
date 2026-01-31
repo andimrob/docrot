@@ -1,0 +1,22 @@
+# docrot configuration
+# See: https://github.com/andimrob/docrot
+
+patterns:
+  - "**/doc/**/*.md"
+  - "**/docs/**/*.md"
+
+exclude:
+  - "**/node_modules/**"
+  - "**/vendor/**"
+
+# What to do when a doc has no freshness frontmatter: warn, skip, or fail
+on_missing_frontmatter: warn
+
+# Default freshness settings for add-frontmatter command
+defaults:
+  strategy: interval
+  interval: 180d
+  # watch patterns for code_changes strategy:
+  # watch:
+  #   - "**/*.go"
+  #   - "**/*.rb"
