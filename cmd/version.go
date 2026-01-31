@@ -8,7 +8,7 @@ import (
 
 var (
 	// Version is set during build via ldflags
-	Version = "dev"
+	Version = "0.1.0"
 )
 
 var versionCmd = &cobra.Command{
