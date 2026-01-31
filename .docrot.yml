@@ -1,0 +1,12 @@
+patterns:
+  - "docs/**/*.md"
+
+exclude:
+  - "**/node_modules/**"
+  - "**/vendor/**"
+
+on_missing_frontmatter: warn
+
+defaults:
+  strategy: interval
+  interval: 180d
