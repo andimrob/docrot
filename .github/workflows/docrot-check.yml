@@ -67,19 +67,25 @@ jobs:
         uses: actions/github-script@v7
         env:
           DRY_RUN: ${{ inputs.dry_run || 'false' }}
+          BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+          COMMIT_SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         with:
           script: |
             const fs = require('fs');
             const output = JSON.parse(fs.readFileSync('docrot-output.json', 'utf8'));
 
             const staleDocs = output.docs.filter(doc => doc.status === 'stale');
+            const branchName = process.env.BRANCH_NAME;
+            const commitSha = process.env.COMMIT_SHA;
+            const runUrl = process.env.RUN_URL;
 
             if (staleDocs.length === 0) {
               console.log('No stale documents found');
               return;
             }
 
-            console.log(`Found ${staleDocs.length} stale document(s)`);
+            console.log(`Found ${staleDocs.length} stale document(s) on branch: ${branchName}`);
 
             // Get existing issues with our label to avoid duplicates
             const existingIssues = await github.rest.issues.listForRepo({
@@ -108,6 +114,8 @@ jobs:
 
               let body = `## Documentation Recertification Required\n\n`;
               body += `**File:** \`${doc.path}\`\n`;
+              body += `**Branch:** \`${branchName}\`\n`;
+              body += `**Commit:** \`${commitSha.substring(0, 7)}\`\n`;
               body += `**Status:** ${doc.status}\n`;
               body += `**Strategy:** ${doc.strategy}\n`;
               body += `**Last Reviewed:** ${doc.last_reviewed || 'Unknown'}\n`;
@@ -122,14 +130,25 @@ jobs:
                 body += `**Reason:** ${doc.reason}\n`;
               }
 
+              // List all changed files if available
+              if (doc.changed_files && doc.changed_files.length > 0) {
+                body += `\n### Changed Files (${doc.changed_files.length})\n\n`;
+                body += `The following files have changed since this documentation was last reviewed:\n\n`;
+                for (const file of doc.changed_files) {
+                  body += `- \`${file}\`\n`;
+                }
+              }
+
               body += `\n---\n\n`;
               body += `### Action Required\n\n`;
-              body += `Please review and update this documentation file. Once reviewed:\n\n`;
-              body += `1. Make any necessary updates to the content\n`;
-              body += `2. Run \`docrot review ${doc.path}\` to update the review date\n`;
-              body += `3. Commit the changes\n\n`;
+              body += `The documentation in \`${doc.path}\` is stale and needs to be updated.\n\n`;
+              body += `**To fix this issue:**\n`;
+              body += `1. Create a new branch from \`${branchName}\`\n`;
+              body += `2. Review and update the documentation content in \`${doc.path}\`\n`;
+              body += `3. Run \`docrot review ${doc.path}\` to update the freshness date\n`;
+              body += `4. Create a pull request targeting \`${branchName}\`\n\n`;
               body += `---\n`;
-              body += `*This issue was automatically created by the Documentation Freshness Check workflow.*`;
+              body += `*Triggered by [workflow run](${runUrl}) on branch \`${branchName}\`*`;
 
               if (process.env.DRY_RUN === 'true') {
                 console.log(`[DRY RUN] Would create issue for: ${doc.path}`);
