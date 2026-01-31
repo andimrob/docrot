@@ -143,6 +143,11 @@ func (c *Checker) checkCodeChanges(doc *document.Document, result Result) Result
 		result.StaleSince = changed[0].Date.Format("2006-01-02")
 		result.Reason = fmt.Sprintf("Code changed: %s (%s)",
 			changed[0].Path, changed[0].Date.Format("2006-01-02"))
+		// Collect all changed file paths
+		result.ChangedFiles = make([]string, len(changed))
+		for i, f := range changed {
+			result.ChangedFiles[i] = f.Path
+		}
 	} else {
 		result.Status = StatusFresh
 	}
@@ -171,6 +176,11 @@ func (c *Checker) checkCodeChangesWithIndex(doc *document.Document, result Resul
 		result.StaleSince = changed[0].Date.Format("2006-01-02")
 		result.Reason = fmt.Sprintf("Code changed: %s (%s)",
 			changed[0].Path, changed[0].Date.Format("2006-01-02"))
+		// Collect all changed file paths
+		result.ChangedFiles = make([]string, len(changed))
+		for i, f := range changed {
+			result.ChangedFiles[i] = f.Path
+		}
 	} else {
 		result.Status = StatusFresh
 	}

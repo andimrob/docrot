@@ -15,7 +15,7 @@ func TestCheckCommand_WithStaleDoc(t *testing.T) {
 
 	// Create a stale doc
 	staleDoc := `---
-freshness:
+docrot:
   last_reviewed: "2020-01-01"
   strategy: interval
   interval: 30d
@@ -60,7 +60,7 @@ func TestCheckCommand_WithFreshDoc(t *testing.T) {
 
 	// Create a fresh doc (using current date)
 	freshDoc := `---
-freshness:
+docrot:
   last_reviewed: "2026-01-20"
   strategy: interval
   interval: 90d
@@ -101,7 +101,7 @@ func TestCheckCommand_JSONFormat(t *testing.T) {
 	os.MkdirAll(docDir, 0755)
 
 	doc := `---
-freshness:
+docrot:
   last_reviewed: "2026-01-20"
   strategy: interval
   interval: 90d
@@ -321,7 +321,7 @@ Some content.
 	contentStr := string(content)
 
 	// Should have freshness added
-	if !strings.Contains(contentStr, "freshness:") {
+	if !strings.Contains(contentStr, "docrot:") {
 		t.Errorf("File should contain freshness block, got: %s", contentStr)
 	}
 
@@ -349,7 +349,7 @@ func TestReviewCommand_UpdatesDate(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	doc := `---
-freshness:
+docrot:
   last_reviewed: "2020-01-01"
   strategy: interval
   interval: 90d

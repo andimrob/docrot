@@ -29,7 +29,7 @@ This is content without frontmatter.
 
 func TestParse_WithUntilDateStrategy(t *testing.T) {
 	content := `---
-freshness:
+docrot:
   last_reviewed: "2024-01-15"
   strategy: until_date
   expires: "2024-06-01"
@@ -58,7 +58,7 @@ freshness:
 
 func TestParse_WithCodeChangesStrategy(t *testing.T) {
 	content := `---
-freshness:
+docrot:
   last_reviewed: "2024-01-15"
   strategy: code_changes
   watch:
@@ -97,7 +97,7 @@ func TestParse_FileNotFound(t *testing.T) {
 func TestParse_WithValidFrontmatter(t *testing.T) {
 	// Create a temp file with frontmatter
 	content := `---
-freshness:
+docrot:
   last_reviewed: "2024-01-15"
   strategy: interval
   interval: 90d
