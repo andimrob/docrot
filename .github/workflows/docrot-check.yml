@@ -84,7 +84,7 @@ jobs:
 
             console.log(`Found ${staleDocs.length} stale document(s) on branch: ${branchName}`);
 
-            // Get existing issues with our label to avoid duplicates
+            // Check for existing open stale-docs issue
             const existingIssues = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -92,75 +92,63 @@ jobs:
               state: 'open'
             });
 
-            const existingPaths = new Set(
-              existingIssues.data
-                .map(issue => {
-                  const match = issue.body?.match(/\*\*File:\*\* `([^`]+)`/);
-                  return match ? match[1] : null;
-                })
-                .filter(Boolean)
-            );
+            if (existingIssues.data.length > 0) {
+              console.log(`Stale docs issue already exists: #${existingIssues.data[0].number}`);
+              console.log('Close the existing issue to create a new one.');
+              return;
+            }
+
+            // Build single issue with all stale docs
+            const title = `📄 Documentation needs review (${staleDocs.length} files)`;
+
+            let body = `## Documentation Review Required\n\n`;
+            body += `**Branch:** \`${branchName}\`\n`;
+            body += `**Commit:** \`${commitSha.substring(0, 7)}\`\n`;
+            body += `**Stale Documents:** ${staleDocs.length}\n\n`;
+
+            body += `---\n\n`;
 
             for (const doc of staleDocs) {
-              if (existingPaths.has(doc.path)) {
-                console.log(`Skipping ${doc.path} - issue already exists`);
-                continue;
-              }
-
-              const title = `📄 Documentation needs review: ${doc.path}`;
-
-              let body = `## Documentation Recertification Required\n\n`;
-              body += `**File:** \`${doc.path}\`\n`;
-              body += `**Branch:** \`${branchName}\`\n`;
-              body += `**Commit:** \`${commitSha.substring(0, 7)}\`\n`;
-              body += `**Status:** ${doc.status}\n`;
-              body += `**Strategy:** ${doc.strategy}\n`;
-              body += `**Last Reviewed:** ${doc.last_reviewed || 'Unknown'}\n`;
-
+              body += `### \`${doc.path}\`\n\n`;
+              body += `| Field | Value |\n`;
+              body += `|-------|-------|\n`;
+              body += `| Strategy | ${doc.strategy} |\n`;
+              body += `| Last Reviewed | ${doc.last_reviewed || 'Unknown'} |\n`;
               if (doc.stale_since) {
-                body += `**Stale Since:** ${doc.stale_since}\n`;
+                body += `| Stale Since | ${doc.stale_since} |\n`;
               }
-              if (doc.expires) {
-                body += `**Expired On:** ${doc.expires}\n`;
-              }
-              if (doc.reason) {
-                body += `**Reason:** ${doc.reason}\n`;
-              }
+              body += `| Reason | ${doc.reason || 'N/A'} |\n`;
 
-              // List all changed files if available
               if (doc.changed_files && doc.changed_files.length > 0) {
-                body += `\n### Changed Files (${doc.changed_files.length})\n\n`;
-                body += `The following files have changed since this documentation was last reviewed:\n\n`;
+                body += `\n**Changed files (${doc.changed_files.length}):**\n`;
                 for (const file of doc.changed_files) {
                   body += `- \`${file}\`\n`;
                 }
               }
 
               body += `\n---\n\n`;
-              body += `### Action Required\n\n`;
-              body += `The documentation in \`${doc.path}\` is stale and needs to be updated.\n\n`;
-              body += `**To fix this issue:**\n`;
-              body += `1. Create a new branch from \`${branchName}\`\n`;
-              body += `2. Review and update the documentation content in \`${doc.path}\`\n`;
-              body += `3. Run \`docrot review ${doc.path}\` to update the freshness date\n`;
-              body += `4. Create a pull request targeting \`${branchName}\`\n\n`;
-              body += `---\n`;
-              body += `*Triggered by [workflow run](${runUrl}) on branch \`${branchName}\`*`;
+            }
 
-              if (process.env.DRY_RUN === 'true') {
-                console.log(`[DRY RUN] Would create issue for: ${doc.path}`);
-                console.log(`Title: ${title}`);
-                console.log(`Body:\n${body}\n`);
-              } else {
-                console.log(`Creating issue for: ${doc.path}`);
-                await github.rest.issues.create({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  title: title,
-                  body: body,
-                  labels: ['documentation', 'stale-docs']
-                });
-              }
+            body += `## Action Required\n\n`;
+            body += `For each stale document:\n`;
+            body += `1. Review and update the documentation content\n`;
+            body += `2. Run \`docrot review <path>\` to update the freshness date\n\n`;
+            body += `---\n`;
+            body += `*Triggered by [workflow run](${runUrl})*`;
+
+            if (process.env.DRY_RUN === 'true') {
+              console.log(`[DRY RUN] Would create issue:`);
+              console.log(`Title: ${title}`);
+              console.log(`Body:\n${body}\n`);
+            } else {
+              console.log(`Creating consolidated stale docs issue`);
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: title,
+                body: body,
+                labels: ['documentation', 'stale-docs']
+              });
             }
 
             // Create summary
