@@ -106,8 +106,15 @@ func (s *Scanner) extractTargetDirs() []string {
 	return result
 }
 
-// isInTargetDir checks if the path is inside one of our target directories
+// isInTargetDir checks if the path is inside one of our target directories.
+// If no target directories were extracted from patterns (e.g., patterns like "**/*.md"),
+// this returns true to allow all files through.
 func (s *Scanner) isInTargetDir(relPath string, targetDirs []string) bool {
+	// If no target directories specified, allow all files
+	if len(targetDirs) == 0 {
+		return true
+	}
+
 	parts := strings.Split(relPath, string(os.PathSeparator))
 	for _, part := range parts {
 		for _, target := range targetDirs {
@@ -145,10 +152,11 @@ func (s *Scanner) shouldSkipDir(relPath string) bool {
 	// Check exclude patterns
 	for _, pattern := range s.exclude {
 		// For directory patterns like "**/node_modules/**", check if current dir matches
-		if matched, _ := doublestar.Match(pattern, relPath); matched {
+		// Pattern errors (malformed patterns) are treated as non-matches
+		if matched, err := doublestar.Match(pattern, relPath); err == nil && matched {
 			return true
 		}
-		if matched, _ := doublestar.Match(pattern, relPath+"/"); matched {
+		if matched, err := doublestar.Match(pattern, relPath+"/"); err == nil && matched {
 			return true
 		}
 	}
@@ -156,20 +164,22 @@ func (s *Scanner) shouldSkipDir(relPath string) bool {
 	return false
 }
 
-// matchesPattern checks if the file matches any of our search patterns
+// matchesPattern checks if the file matches any of our search patterns.
+// Pattern errors (malformed patterns) are treated as non-matches.
 func (s *Scanner) matchesPattern(relPath string) bool {
 	for _, pattern := range s.patterns {
-		if matched, _ := doublestar.Match(pattern, relPath); matched {
+		if matched, err := doublestar.Match(pattern, relPath); err == nil && matched {
 			return true
 		}
 	}
 	return false
 }
 
-// isExcluded checks if a file path matches any exclude pattern
+// isExcluded checks if a file path matches any exclude pattern.
+// Pattern errors (malformed patterns) are treated as non-matches.
 func (s *Scanner) isExcluded(relPath string) bool {
 	for _, pattern := range s.exclude {
-		if matched, _ := doublestar.Match(pattern, relPath); matched {
+		if matched, err := doublestar.Match(pattern, relPath); err == nil && matched {
 			return true
 		}
 	}

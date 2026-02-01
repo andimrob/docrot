@@ -36,6 +36,11 @@ func New(repoRoot string) (*Client, error) {
 	return &Client{repoRoot: repoRoot}, nil
 }
 
+// RepoRoot returns the root directory of the git repository
+func (c *Client) RepoRoot() string {
+	return c.repoRoot
+}
+
 // LastCommitDate returns the date of the last commit that touched the given path
 func (c *Client) LastCommitDate(path string) (time.Time, error) {
 	cmd := exec.Command("git", "log", "-1", "--format=%aI", "--", path)
@@ -54,8 +59,9 @@ func (c *Client) LastCommitDate(path string) (time.Time, error) {
 	return time.Parse(time.RFC3339, dateStr)
 }
 
-// FilesChangedSince returns files matching the patterns that were changed after the given date
-func (c *Client) FilesChangedSince(since time.Time, patterns []string, relativeTo string) ([]ChangedFile, error) {
+// FilesChangedSince returns files matching the watch patterns that were changed after the given date,
+// excluding any files that match the ignore patterns.
+func (c *Client) FilesChangedSince(since time.Time, watchPatterns []string, ignorePatterns []string, relativeTo string) ([]ChangedFile, error) {
 	sinceStr := since.Format("2006-01-02T15:04:05")
 	cmd := exec.Command("git", "log", "--since="+sinceStr, "--name-only", "--format=%aI", "--diff-filter=ACMR")
 	cmd.Dir = c.repoRoot
@@ -67,18 +73,31 @@ func (c *Client) FilesChangedSince(since time.Time, patterns []string, relativeT
 
 	fileChanges := parseGitLogOutput(string(out))
 
-	// Filter by patterns
+	// Filter by watch patterns, excluding ignored patterns
 	var results []ChangedFile
 	for path, date := range fileChanges {
-		for _, pattern := range patterns {
-			if matched, _ := doublestar.Match(pattern, path); matched {
-				results = append(results, ChangedFile{Path: path, Date: date})
-				break
-			}
+		if matchesPatterns(path, watchPatterns) && !matchesPatterns(path, ignorePatterns) {
+			results = append(results, ChangedFile{Path: path, Date: date})
 		}
 	}
 
 	return results, nil
+}
+
+// matchesPatterns returns true if the path matches any of the given patterns.
+// Pattern errors (malformed patterns) are treated as non-matches.
+func matchesPatterns(path string, patterns []string) bool {
+	for _, pattern := range patterns {
+		matched, err := doublestar.Match(pattern, path)
+		if err != nil {
+			// Malformed pattern - skip it (treated as non-match)
+			continue
+		}
+		if matched {
+			return true
+		}
+	}
+	return false
 }
 
 // parseGitLogOutput parses git log output with --name-only --format=%aI
@@ -151,24 +170,24 @@ func (c *Client) BuildFileChangeIndex(since time.Time) (*FileChangeIndex, error)
 	return &FileChangeIndex{files: parseGitLogOutput(string(out))}, nil
 }
 
-// HasChangedSince returns true if any file matching the patterns changed after the given date
-func (idx *FileChangeIndex) HasChangedSince(since time.Time, patterns []string) bool {
+// HasChangedSince returns true if any file matching the watch patterns (and not matching ignore patterns)
+// changed after the given date
+func (idx *FileChangeIndex) HasChangedSince(since time.Time, watchPatterns []string, ignorePatterns []string) bool {
 	for path, date := range idx.files {
 		if !date.After(since) {
 			continue
 		}
 
-		for _, pattern := range patterns {
-			if matched, _ := doublestar.Match(pattern, path); matched {
-				return true
-			}
+		if matchesPatterns(path, watchPatterns) && !matchesPatterns(path, ignorePatterns) {
+			return true
 		}
 	}
 	return false
 }
 
-// GetChangedFiles returns all files matching patterns that changed after the given date
-func (idx *FileChangeIndex) GetChangedFiles(since time.Time, patterns []string) []ChangedFile {
+// GetChangedFiles returns all files matching watch patterns (and not matching ignore patterns)
+// that changed after the given date
+func (idx *FileChangeIndex) GetChangedFiles(since time.Time, watchPatterns []string, ignorePatterns []string) []ChangedFile {
 	var results []ChangedFile
 
 	for path, date := range idx.files {
@@ -176,11 +195,8 @@ func (idx *FileChangeIndex) GetChangedFiles(since time.Time, patterns []string) 
 			continue
 		}
 
-		for _, pattern := range patterns {
-			if matched, _ := doublestar.Match(pattern, path); matched {
-				results = append(results, ChangedFile{Path: path, Date: date})
-				break
-			}
+		if matchesPatterns(path, watchPatterns) && !matchesPatterns(path, ignorePatterns) {
+			results = append(results, ChangedFile{Path: path, Date: date})
 		}
 	}
 

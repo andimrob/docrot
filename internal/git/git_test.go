@@ -117,7 +117,7 @@ func TestFilesChangedSince(t *testing.T) {
 	}
 
 	// Find files changed since doc was committed
-	changed, err := client.FilesChangedSince(docDate, []string{"src/**/*.go"}, tmpDir)
+	changed, err := client.FilesChangedSince(docDate, []string{"src/**/*.go"}, nil, tmpDir)
 	if err != nil {
 		t.Fatalf("FilesChangedSince() error = %v", err)
 	}
@@ -189,20 +189,20 @@ func TestFileChangeIndex_HasChangedSince(t *testing.T) {
 
 	// Use a date far in the past - should find changes
 	pastDate := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
-	changed := index.HasChangedSince(pastDate, []string{"**/*.go"})
+	changed := index.HasChangedSince(pastDate, []string{"**/*.go"}, nil)
 	if !changed {
 		t.Error("HasChangedSince(past) = false, want true")
 	}
 
 	// Use a date in the future - should NOT find changes
 	futureDate := time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC)
-	changed = index.HasChangedSince(futureDate, []string{"**/*.go"})
+	changed = index.HasChangedSince(futureDate, []string{"**/*.go"}, nil)
 	if changed {
 		t.Error("HasChangedSince(future) = true, want false")
 	}
 
 	// Check with pattern that doesn't match any files
-	changed = index.HasChangedSince(pastDate, []string{"**/*.rb"})
+	changed = index.HasChangedSince(pastDate, []string{"**/*.rb"}, nil)
 	if changed {
 		t.Error("HasChangedSince() = true, want false (no .rb files)")
 	}
@@ -229,12 +229,120 @@ func TestFileChangeIndex_GetChangedFiles(t *testing.T) {
 
 	// Get .go files changed since main.go was committed
 	// (should not include main.go itself since it wasn't changed AFTER that date)
-	changed := index.GetChangedFiles(mainDate, []string{"**/*.go"})
+	changed := index.GetChangedFiles(mainDate, []string{"**/*.go"}, nil)
 
 	// main.go should not be included (it was committed at mainDate, not after)
 	for _, f := range changed {
 		if f.Path == "src/main.go" {
 			t.Error("GetChangedFiles() should not include main.go (not changed AFTER mainDate)")
 		}
+	}
+}
+
+func TestFilesChangedSince_WithIgnorePatterns(t *testing.T) {
+	tmpDir := setupGitRepo(t)
+
+	// Create code files and doc files
+	gitCommit(t, tmpDir, "subsystem/src/main.go", "package main", "Add main")
+	gitCommit(t, tmpDir, "subsystem/src/lib.go", "package lib", "Add lib")
+	gitCommit(t, tmpDir, "subsystem/docs/readme.md", "# Readme", "Add docs")
+	gitCommit(t, tmpDir, "subsystem/docs/guide.md", "# Guide", "Add guide")
+
+	client, err := New(tmpDir)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	pastDate := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	// Watch all files in subsystem, ignore docs directory
+	watch := []string{"subsystem/**/*"}
+	ignore := []string{"subsystem/docs/**"}
+
+	changed, err := client.FilesChangedSince(pastDate, watch, ignore, "")
+	if err != nil {
+		t.Fatalf("FilesChangedSince() error = %v", err)
+	}
+
+	// Should find the .go files but not the .md files in docs
+	goFiles := 0
+	mdFiles := 0
+	for _, f := range changed {
+		if filepath.Ext(f.Path) == ".go" {
+			goFiles++
+		}
+		if filepath.Ext(f.Path) == ".md" {
+			mdFiles++
+		}
+	}
+
+	if goFiles != 2 {
+		t.Errorf("Expected 2 .go files, got %d", goFiles)
+	}
+	if mdFiles != 0 {
+		t.Errorf("Expected 0 .md files (ignored), got %d", mdFiles)
+	}
+}
+
+func TestFileChangeIndex_GetChangedFiles_WithIgnore(t *testing.T) {
+	tmpDir := setupGitRepo(t)
+
+	gitCommit(t, tmpDir, "subsystem/src/main.go", "package main", "Add main")
+	gitCommit(t, tmpDir, "subsystem/src/test_helper.go", "package main", "Add test helper")
+	gitCommit(t, tmpDir, "subsystem/docs/readme.md", "# Readme", "Add docs")
+
+	client, err := New(tmpDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	index, err := client.BuildFileChangeIndex(time.Time{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pastDate := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	// Watch everything, ignore docs and test files
+	watch := []string{"subsystem/**/*"}
+	ignore := []string{"subsystem/docs/**", "**/*_helper.go"}
+
+	changed := index.GetChangedFiles(pastDate, watch, ignore)
+
+	// Should only find main.go (not test_helper.go or docs)
+	if len(changed) != 1 {
+		t.Errorf("Expected 1 file, got %d", len(changed))
+	}
+	if len(changed) > 0 && changed[0].Path != "subsystem/src/main.go" {
+		t.Errorf("Expected subsystem/src/main.go, got %s", changed[0].Path)
+	}
+}
+
+func TestFileChangeIndex_HasChangedSince_WithIgnore(t *testing.T) {
+	tmpDir := setupGitRepo(t)
+
+	// Only create files that will be ignored
+	gitCommit(t, tmpDir, "subsystem/docs/readme.md", "# Readme", "Add docs")
+	gitCommit(t, tmpDir, "subsystem/docs/guide.md", "# Guide", "Add guide")
+
+	client, err := New(tmpDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	index, err := client.BuildFileChangeIndex(time.Time{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pastDate := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	// Watch everything but ignore docs - should return false since all files are ignored
+	watch := []string{"subsystem/**/*"}
+	ignore := []string{"subsystem/docs/**"}
+
+	changed := index.HasChangedSince(pastDate, watch, ignore)
+	if changed {
+		t.Error("HasChangedSince() = true, want false (all matching files are ignored)")
 	}
 }

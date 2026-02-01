@@ -23,7 +23,7 @@ func TestCheck_IntervalStrategy_Fresh(t *testing.T) {
 		},
 	}
 
-	checker := NewChecker(nil) // No git client needed for interval
+	checker := NewChecker(nil, "") // No git client needed for interval
 	result := checker.Check(doc)
 
 	if result.Status != StatusFresh {
@@ -43,7 +43,7 @@ func TestCheck_IntervalStrategy_Stale(t *testing.T) {
 		},
 	}
 
-	checker := NewChecker(nil)
+	checker := NewChecker(nil, "")
 	result := checker.Check(doc)
 
 	if result.Status != StatusStale {
@@ -67,7 +67,7 @@ func TestCheck_UntilDateStrategy_Fresh(t *testing.T) {
 		},
 	}
 
-	checker := NewChecker(nil)
+	checker := NewChecker(nil, "")
 	result := checker.Check(doc)
 
 	if result.Status != StatusFresh {
@@ -87,7 +87,7 @@ func TestCheck_UntilDateStrategy_Stale(t *testing.T) {
 		},
 	}
 
-	checker := NewChecker(nil)
+	checker := NewChecker(nil, "")
 	result := checker.Check(doc)
 
 	if result.Status != StatusStale {
@@ -101,7 +101,7 @@ func TestCheck_MissingFrontmatter(t *testing.T) {
 		Freshness: nil,
 	}
 
-	checker := NewChecker(nil)
+	checker := NewChecker(nil, "")
 	result := checker.Check(doc)
 
 	if result.Status != StatusMissingFrontmatter {
@@ -137,7 +137,7 @@ func TestCheck_IntervalParsing(t *testing.T) {
 				},
 			}
 
-			checker := NewChecker(nil)
+			checker := NewChecker(nil, "")
 			result := checker.Check(doc)
 
 			if result.Status != tt.want {
@@ -217,7 +217,7 @@ func TestCheck_CodeChangesStrategy_Fresh(t *testing.T) {
 		},
 	}
 
-	checker := NewChecker(gitClient)
+	checker := NewChecker(gitClient, tmpDir)
 	result := checker.Check(doc)
 
 	if result.Status != StatusFresh {
@@ -249,7 +249,7 @@ func TestCheck_CodeChangesStrategy_Stale(t *testing.T) {
 		},
 	}
 
-	checker := NewChecker(gitClient)
+	checker := NewChecker(gitClient, tmpDir)
 	result := checker.Check(doc)
 
 	if result.Status != StatusStale {
@@ -291,7 +291,7 @@ func TestCheckWithIndex_CodeChanges_Fresh(t *testing.T) {
 		},
 	}
 
-	checker := NewChecker(gitClient)
+	checker := NewChecker(gitClient, tmpDir)
 	result := checker.CheckWithIndex(doc, index)
 
 	if result.Status != StatusFresh {
@@ -325,7 +325,7 @@ func TestCheckWithIndex_CodeChanges_Stale(t *testing.T) {
 		},
 	}
 
-	checker := NewChecker(gitClient)
+	checker := NewChecker(gitClient, tmpDir)
 	result := checker.CheckWithIndex(doc, index)
 
 	if result.Status != StatusStale {
@@ -344,10 +344,161 @@ func TestCheckWithIndex_IntervalStrategy_StillWorks(t *testing.T) {
 		},
 	}
 
-	checker := NewChecker(nil)
+	checker := NewChecker(nil, "")
 	result := checker.CheckWithIndex(doc, nil)
 
 	if result.Status != StatusFresh {
 		t.Errorf("Status = %v, want %v", result.Status, StatusFresh)
+	}
+}
+
+// Tests for smart default patterns based on document location
+
+func TestComputeDefaultPatterns(t *testing.T) {
+	tests := []struct {
+		name        string
+		docPath     string
+		repoRoot    string
+		wantWatch   string
+		wantIgnore  string
+	}{
+		{
+			name:       "doc in subsystem/docs",
+			docPath:    "/repo/subsystem/docs/readme.md",
+			repoRoot:   "/repo",
+			wantWatch:  "subsystem/**/*",
+			wantIgnore: "subsystem/docs/**",
+		},
+		{
+			name:       "doc in subsystem/doc (singular)",
+			docPath:    "/repo/subsystem/doc/readme.md",
+			repoRoot:   "/repo",
+			wantWatch:  "subsystem/**/*",
+			wantIgnore: "subsystem/doc/**",
+		},
+		{
+			name:       "doc in nested docs dir",
+			docPath:    "/repo/subsystem/docs/guides/setup.md",
+			repoRoot:   "/repo",
+			wantWatch:  "subsystem/**/*",
+			wantIgnore: "subsystem/docs/**",
+		},
+		{
+			name:       "doc at repo root docs",
+			docPath:    "/repo/docs/readme.md",
+			repoRoot:   "/repo",
+			wantWatch:  "**/*",
+			wantIgnore: "docs/**",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			watch, ignore := ComputeDefaultPatterns(tt.docPath, tt.repoRoot)
+
+			if len(watch) != 1 || watch[0] != tt.wantWatch {
+				t.Errorf("watch = %v, want [%s]", watch, tt.wantWatch)
+			}
+			if len(ignore) != 1 || ignore[0] != tt.wantIgnore {
+				t.Errorf("ignore = %v, want [%s]", ignore, tt.wantIgnore)
+			}
+		})
+	}
+}
+
+// Tests for code_changes strategy with ignore patterns
+
+func TestCheck_CodeChangesStrategy_WithIgnore(t *testing.T) {
+	tmpDir := setupGitRepo(t)
+
+	// Create files - only docs, no code
+	gitCommit(t, tmpDir, "subsystem/docs/readme.md", "# Readme", "Add docs")
+	gitCommit(t, tmpDir, "subsystem/docs/guide.md", "# Guide", "Add guide")
+
+	gitClient, err := git.New(tmpDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Watch all, ignore docs - should be fresh since only ignored files exist
+	doc := &document.Document{
+		Path: filepath.Join(tmpDir, "subsystem/docs/readme.md"),
+		Freshness: &document.Freshness{
+			LastReviewed: time.Now().AddDate(0, 0, -1).Format("2006-01-02"),
+			Strategy:     "code_changes",
+			Watch:        []string{"subsystem/**/*"},
+			Ignore:       []string{"subsystem/docs/**"},
+		},
+	}
+
+	checker := NewChecker(gitClient, tmpDir)
+	result := checker.Check(doc)
+
+	if result.Status != StatusFresh {
+		t.Errorf("Status = %v, want %v (only ignored files changed)", result.Status, StatusFresh)
+	}
+}
+
+// Test using smart defaults (no explicit watch/ignore in frontmatter)
+
+func TestCheck_SmartDefaults(t *testing.T) {
+	tmpDir := setupGitRepo(t)
+
+	// Create structure: subsystem/docs/readme.md and subsystem/src/main.go
+	gitCommit(t, tmpDir, "subsystem/docs/readme.md", "# Readme", "Add docs")
+	gitCommit(t, tmpDir, "subsystem/src/main.go", "package main", "Add code")
+
+	gitClient, err := git.New(tmpDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// No watch/ignore specified - should use smart defaults
+	// (watch subsystem/**/* , ignore subsystem/docs/**)
+	doc := &document.Document{
+		Path: filepath.Join(tmpDir, "subsystem/docs/readme.md"),
+		Freshness: &document.Freshness{
+			LastReviewed: time.Now().AddDate(0, 0, -1).Format("2006-01-02"),
+			Strategy:     "code_changes",
+			// No Watch or Ignore - uses smart defaults
+		},
+	}
+
+	checker := NewChecker(gitClient, tmpDir)
+	result := checker.Check(doc)
+
+	// Code file changed after last_reviewed, should be stale
+	if result.Status != StatusStale {
+		t.Errorf("Status = %v, want %v (smart defaults should detect code change)", result.Status, StatusStale)
+	}
+}
+
+func TestCheck_SmartDefaults_OnlyDocsChanged(t *testing.T) {
+	tmpDir := setupGitRepo(t)
+
+	// Only create docs, no code files
+	gitCommit(t, tmpDir, "subsystem/docs/readme.md", "# Readme", "Add docs")
+	gitCommit(t, tmpDir, "subsystem/docs/guide.md", "# Guide", "Add guide")
+
+	gitClient, err := git.New(tmpDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// No watch/ignore specified - smart defaults should ignore docs dir
+	doc := &document.Document{
+		Path: filepath.Join(tmpDir, "subsystem/docs/readme.md"),
+		Freshness: &document.Freshness{
+			LastReviewed: time.Now().AddDate(0, 0, -1).Format("2006-01-02"),
+			Strategy:     "code_changes",
+		},
+	}
+
+	checker := NewChecker(gitClient, tmpDir)
+	result := checker.Check(doc)
+
+	// Only docs changed (ignored by default), should be fresh
+	if result.Status != StatusFresh {
+		t.Errorf("Status = %v, want %v (smart defaults should ignore docs dir)", result.Status, StatusFresh)
 	}
 }
