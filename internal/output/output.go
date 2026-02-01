@@ -59,7 +59,16 @@ func (f *TextFormatter) writeResult(r freshness.Result) {
 
 	fmt.Fprintf(f.w, "%s %s [%s]\n", statusIcon, r.Path, r.Status)
 
-	if r.Reason != "" {
+	if len(r.ChangedFiles) > 0 {
+		// Show all changed files
+		for i, file := range r.ChangedFiles {
+			connector := "├─"
+			if i == len(r.ChangedFiles)-1 {
+				connector = "└─"
+			}
+			fmt.Fprintf(f.w, "  %s %s\n", connector, file)
+		}
+	} else if r.Reason != "" {
 		fmt.Fprintf(f.w, "  └─ %s\n", r.Reason)
 	}
 }
