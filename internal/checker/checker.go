@@ -28,12 +28,12 @@ func Run(paths []string, gitClient *git.Client, workers int, defaults *freshness
 	// Phase 1: Parse all documents in parallel
 	parsedDocs := parseAllDocs(paths, workers)
 
-	// Phase 2: Build FileChangeIndex for all docs (all strategies check for code changes)
+	// Phase 2: Build FileChangeIndex for code_changes strategy docs only
 	var index *git.FileChangeIndex
 	var repoRoot string
 	if gitClient != nil {
 		repoRoot = gitClient.RepoRoot()
-		oldestDate := findOldestLastReviewedDate(parsedDocs)
+		oldestDate := findOldestCodeChangesDate(parsedDocs)
 		if !oldestDate.IsZero() {
 			// Build index starting from oldest date to minimize git output
 			var err error
@@ -84,14 +84,19 @@ func parseAllDocs(paths []string, workers int) []parsedDoc {
 	return parsed
 }
 
-// findOldestLastReviewedDate finds the oldest last_reviewed date among all docs
-// with freshness configuration. Returns zero time if none found.
-// All strategies check for code changes, so we need the oldest date across all docs.
-func findOldestLastReviewedDate(docs []parsedDoc) time.Time {
+// findOldestCodeChangesDate finds the oldest last_reviewed date among docs
+// using the code_changes strategy. Returns zero time if none found.
+// Only code_changes strategy needs git history, so we scope the index accordingly.
+func findOldestCodeChangesDate(docs []parsedDoc) time.Time {
 	var oldest time.Time
 
 	for _, pd := range docs {
 		if pd.err != nil || pd.doc == nil || pd.doc.Freshness == nil {
+			continue
+		}
+
+		// Only consider docs using code_changes strategy
+		if pd.doc.Freshness.Strategy != "code_changes" {
 			continue
 		}
 
