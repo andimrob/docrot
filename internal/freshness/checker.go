@@ -120,7 +120,7 @@ func (c *Checker) Check(doc *document.Document) Result {
 }
 
 // CheckWithIndex checks a document using an optional precomputed FileChangeIndex.
-// All strategies check for code changes in addition to their primary logic.
+// Only the code_changes strategy uses the index; other strategies ignore it.
 // Using an index avoids individual git calls for code change detection.
 func (c *Checker) CheckWithIndex(doc *document.Document, index *git.FileChangeIndex) Result {
 	result := Result{
