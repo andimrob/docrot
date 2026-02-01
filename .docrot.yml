@@ -1,8 +1,4 @@
-# docrot configuration for docrot itself
-# "Eating our own dogfood"
-
 patterns:
-  - "README.md"
   - "docs/**/*.md"
 
 exclude:
