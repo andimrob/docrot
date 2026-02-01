@@ -80,6 +80,33 @@ Create a default `.docrot.yml` configuration file in the current directory.
 docrot init
 ```
 
+### add-frontmatter
+
+Add docrot frontmatter to documentation files that don't have it yet.
+
+```bash
+docrot add-frontmatter [paths...]
+```
+
+**Flags:**
+- `--strategy, -s`: Default strategy to use (default: `interval`)
+- `--interval, -i`: Default interval for interval strategy (default: `180d`)
+- `--dry-run, -n`: Show what would be changed without modifying files
+
+**Example:**
+```bash
+# Add frontmatter to all docs missing it
+docrot add-frontmatter
+
+# Dry run to see what would be added
+docrot add-frontmatter --dry-run
+
+# Use specific strategy and interval
+docrot add-frontmatter --strategy code_changes
+```
+
+This command scans for documentation files and adds frontmatter to any that don't have it. Useful when first adopting docrot in an existing project.
+
 ### version
 
 Print version information.
