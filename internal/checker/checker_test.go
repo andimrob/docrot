@@ -36,7 +36,7 @@ docrot:
 		paths[i] = filepath.Join(docDir, fmt.Sprintf("doc%d.md", i))
 	}
 
-	results := Run(paths, nil, 4) // 4 workers
+	results := Run(paths, nil, 4, nil) // 4 workers, no defaults
 
 	if len(results) != 10 {
 		t.Errorf("Expected 10 results, got %d", len(results))
@@ -76,7 +76,7 @@ docrot:
 
 	// Time parallel execution
 	start := time.Now()
-	results := Run(paths, nil, 8)
+	results := Run(paths, nil, 8, nil)
 	parallelDuration := time.Since(start)
 
 	if len(results) != numDocs {

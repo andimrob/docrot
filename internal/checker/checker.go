@@ -20,7 +20,7 @@ type parsedDoc struct {
 // Run processes files in parallel and returns freshness results.
 // It optimizes by building a FileChangeIndex once instead of making
 // individual git calls per file for code change detection.
-func Run(paths []string, gitClient *git.Client, workers int) []freshness.Result {
+func Run(paths []string, gitClient *git.Client, workers int, defaults *freshness.DefaultPatterns) []freshness.Result {
 	if workers <= 0 {
 		workers = runtime.NumCPU()
 	}
@@ -46,7 +46,7 @@ func Run(paths []string, gitClient *git.Client, workers int) []freshness.Result 
 	}
 
 	// Phase 3: Check all documents in parallel using the index
-	return checkAllDocs(parsedDocs, gitClient, repoRoot, index, workers)
+	return checkAllDocs(parsedDocs, gitClient, repoRoot, index, workers, defaults)
 }
 
 // parseAllDocs parses all documents in parallel
@@ -109,12 +109,12 @@ func findOldestLastReviewedDate(docs []parsedDoc) time.Time {
 }
 
 // checkAllDocs checks all parsed documents in parallel
-func checkAllDocs(docs []parsedDoc, gitClient *git.Client, repoRoot string, index *git.FileChangeIndex, workers int) []freshness.Result {
+func checkAllDocs(docs []parsedDoc, gitClient *git.Client, repoRoot string, index *git.FileChangeIndex, workers int, defaults *freshness.DefaultPatterns) []freshness.Result {
 	jobs := make(chan parsedDoc, len(docs))
 	results := make(chan freshness.Result, len(docs))
 
 	var wg sync.WaitGroup
-	checker := freshness.NewChecker(gitClient, repoRoot)
+	checker := freshness.NewChecker(gitClient, repoRoot, defaults)
 
 	for i := 0; i < workers; i++ {
 		wg.Add(1)
@@ -156,8 +156,8 @@ func checkAllDocs(docs []parsedDoc, gitClient *git.Client, repoRoot string, inde
 
 // RunWithCallback processes files in parallel and calls callback for each result
 // Useful for streaming output
-func RunWithCallback(paths []string, gitClient *git.Client, workers int, callback func(freshness.Result)) {
-	results := Run(paths, gitClient, workers)
+func RunWithCallback(paths []string, gitClient *git.Client, workers int, defaults *freshness.DefaultPatterns, callback func(freshness.Result)) {
+	results := Run(paths, gitClient, workers, defaults)
 	for _, result := range results {
 		callback(result)
 	}

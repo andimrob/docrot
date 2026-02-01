@@ -1,0 +1,19 @@
+# docrot configuration for docrot itself
+# "Eating our own dogfood"
+
+patterns:
+  - "README.md"
+  - "docs/**/*.md"
+
+exclude:
+  - ".worktrees/**"
+
+on_missing_frontmatter: warn
+
+defaults:
+  strategy: code_changes
+  watch:
+    - "cmd/**/*.go"
+    - "internal/**/*.go"
+  ignore:
+    - "**/*_test.go"

@@ -11,13 +11,20 @@ import (
 	"github.com/andimrob/docrot/internal/git"
 )
 
+// DefaultPatterns holds default watch/ignore patterns from config.
+type DefaultPatterns struct {
+	Watch  []string
+	Ignore []string
+}
+
 type Checker struct {
 	git      *git.Client
 	repoRoot string
+	defaults *DefaultPatterns
 }
 
-func NewChecker(gitClient *git.Client, repoRoot string) *Checker {
-	return &Checker{git: gitClient, repoRoot: repoRoot}
+func NewChecker(gitClient *git.Client, repoRoot string, defaults *DefaultPatterns) *Checker {
+	return &Checker{git: gitClient, repoRoot: repoRoot, defaults: defaults}
 }
 
 // ComputeDefaultPatterns computes smart default watch/ignore patterns based on document location.
@@ -72,18 +79,35 @@ func ComputeDefaultPatterns(docPath, repoRoot string) (watch []string, ignore []
 }
 
 // getWatchIgnorePatterns returns the watch and ignore patterns for a document,
-// using explicit patterns from frontmatter if provided, otherwise smart defaults
+// merging explicit frontmatter patterns with config defaults.
+// Priority: frontmatter > config defaults > smart defaults
 func (c *Checker) getWatchIgnorePatterns(doc *document.Document) (watch []string, ignore []string) {
 	watch = doc.Freshness.Watch
 	ignore = doc.Freshness.Ignore
 
-	// If neither watch nor ignore is specified, use smart defaults
-	if len(watch) == 0 && len(ignore) == 0 && c.repoRoot != "" {
-		return ComputeDefaultPatterns(doc.Path, c.repoRoot)
+	// If neither watch nor ignore is specified in frontmatter
+	if len(watch) == 0 && len(ignore) == 0 {
+		// Try config defaults first
+		if c.defaults != nil && (len(c.defaults.Watch) > 0 || len(c.defaults.Ignore) > 0) {
+			return c.defaults.Watch, c.defaults.Ignore
+		}
+		// Fall back to smart defaults based on document location
+		if c.repoRoot != "" {
+			return ComputeDefaultPatterns(doc.Path, c.repoRoot)
+		}
 	}
 
-	// If watch is specified but ignore is not, use empty ignore
-	// If ignore is specified but watch is not, use watch all
+	// Merge: if frontmatter has watch but not ignore, inherit ignore from config defaults
+	if len(doc.Freshness.Watch) > 0 && len(doc.Freshness.Ignore) == 0 && c.defaults != nil {
+		ignore = c.defaults.Ignore
+	}
+
+	// Merge: if frontmatter has ignore but not watch, inherit watch from config defaults
+	if len(doc.Freshness.Ignore) > 0 && len(doc.Freshness.Watch) == 0 && c.defaults != nil {
+		watch = c.defaults.Watch
+	}
+
+	// If still no watch pattern, watch everything
 	if len(watch) == 0 {
 		watch = []string{"**/*"}
 	}
