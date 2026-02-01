@@ -23,7 +23,7 @@ func TestCheck_IntervalStrategy_Fresh(t *testing.T) {
 		},
 	}
 
-	checker := NewChecker(nil, "") // No git client needed for interval
+	checker := NewChecker(nil, "", nil) // No git client needed for interval
 	result := checker.Check(doc)
 
 	if result.Status != StatusFresh {
@@ -43,7 +43,7 @@ func TestCheck_IntervalStrategy_Stale(t *testing.T) {
 		},
 	}
 
-	checker := NewChecker(nil, "")
+	checker := NewChecker(nil, "", nil)
 	result := checker.Check(doc)
 
 	if result.Status != StatusStale {
@@ -67,7 +67,7 @@ func TestCheck_UntilDateStrategy_Fresh(t *testing.T) {
 		},
 	}
 
-	checker := NewChecker(nil, "")
+	checker := NewChecker(nil, "", nil)
 	result := checker.Check(doc)
 
 	if result.Status != StatusFresh {
@@ -87,7 +87,7 @@ func TestCheck_UntilDateStrategy_Stale(t *testing.T) {
 		},
 	}
 
-	checker := NewChecker(nil, "")
+	checker := NewChecker(nil, "", nil)
 	result := checker.Check(doc)
 
 	if result.Status != StatusStale {
@@ -101,7 +101,7 @@ func TestCheck_MissingFrontmatter(t *testing.T) {
 		Freshness: nil,
 	}
 
-	checker := NewChecker(nil, "")
+	checker := NewChecker(nil, "", nil)
 	result := checker.Check(doc)
 
 	if result.Status != StatusMissingFrontmatter {
@@ -137,7 +137,7 @@ func TestCheck_IntervalParsing(t *testing.T) {
 				},
 			}
 
-			checker := NewChecker(nil, "")
+			checker := NewChecker(nil, "", nil)
 			result := checker.Check(doc)
 
 			if result.Status != tt.want {
@@ -217,7 +217,7 @@ func TestCheck_CodeChangesStrategy_Fresh(t *testing.T) {
 		},
 	}
 
-	checker := NewChecker(gitClient, tmpDir)
+	checker := NewChecker(gitClient, tmpDir, nil)
 	result := checker.Check(doc)
 
 	if result.Status != StatusFresh {
@@ -249,7 +249,7 @@ func TestCheck_CodeChangesStrategy_Stale(t *testing.T) {
 		},
 	}
 
-	checker := NewChecker(gitClient, tmpDir)
+	checker := NewChecker(gitClient, tmpDir, nil)
 	result := checker.Check(doc)
 
 	if result.Status != StatusStale {
@@ -291,7 +291,7 @@ func TestCheckWithIndex_CodeChanges_Fresh(t *testing.T) {
 		},
 	}
 
-	checker := NewChecker(gitClient, tmpDir)
+	checker := NewChecker(gitClient, tmpDir, nil)
 	result := checker.CheckWithIndex(doc, index)
 
 	if result.Status != StatusFresh {
@@ -325,7 +325,7 @@ func TestCheckWithIndex_CodeChanges_Stale(t *testing.T) {
 		},
 	}
 
-	checker := NewChecker(gitClient, tmpDir)
+	checker := NewChecker(gitClient, tmpDir, nil)
 	result := checker.CheckWithIndex(doc, index)
 
 	if result.Status != StatusStale {
@@ -344,7 +344,7 @@ func TestCheckWithIndex_IntervalStrategy_StillWorks(t *testing.T) {
 		},
 	}
 
-	checker := NewChecker(nil, "")
+	checker := NewChecker(nil, "", nil)
 	result := checker.CheckWithIndex(doc, nil)
 
 	if result.Status != StatusFresh {
@@ -431,7 +431,7 @@ func TestCheck_CodeChangesStrategy_WithIgnore(t *testing.T) {
 		},
 	}
 
-	checker := NewChecker(gitClient, tmpDir)
+	checker := NewChecker(gitClient, tmpDir, nil)
 	result := checker.Check(doc)
 
 	if result.Status != StatusFresh {
@@ -464,7 +464,7 @@ func TestCheck_SmartDefaults(t *testing.T) {
 		},
 	}
 
-	checker := NewChecker(gitClient, tmpDir)
+	checker := NewChecker(gitClient, tmpDir, nil)
 	result := checker.Check(doc)
 
 	// Code file changed after last_reviewed, should be stale
@@ -494,11 +494,250 @@ func TestCheck_SmartDefaults_OnlyDocsChanged(t *testing.T) {
 		},
 	}
 
-	checker := NewChecker(gitClient, tmpDir)
+	checker := NewChecker(gitClient, tmpDir, nil)
 	result := checker.Check(doc)
 
 	// Only docs changed (ignored by default), should be fresh
 	if result.Status != StatusFresh {
 		t.Errorf("Status = %v, want %v (smart defaults should ignore docs dir)", result.Status, StatusFresh)
 	}
+}
+
+// Tests for config defaults merging with document frontmatter
+
+func TestCheck_ConfigDefaults_InheritIgnoreWhenWatchSet(t *testing.T) {
+	// When doc has watch but no ignore, it should inherit ignore from config defaults
+	tmpDir := setupGitRepo(t)
+
+	// Create code and test files
+	gitCommit(t, tmpDir, "src/main.go", "package main", "Add code")
+	gitCommit(t, tmpDir, "src/main_test.go", "package main", "Add test")
+
+	gitClient, err := git.New(tmpDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Doc has watch but no ignore
+	doc := &document.Document{
+		Path: filepath.Join(tmpDir, "docs/readme.md"),
+		Freshness: &document.Freshness{
+			LastReviewed: time.Now().AddDate(0, 0, -1).Format("2006-01-02"),
+			Strategy:     "code_changes",
+			Watch:        []string{"src/**/*.go"}, // Watch all Go files
+			// No Ignore - should inherit from config defaults
+		},
+	}
+
+	// Config defaults ignore test files
+	defaults := &DefaultPatterns{
+		Watch:  []string{"**/*.go"},
+		Ignore: []string{"**/*_test.go"},
+	}
+
+	checker := NewChecker(gitClient, tmpDir, defaults)
+	result := checker.Check(doc)
+
+	// Only test file changed after main.go, but tests are ignored via config defaults
+	// The main.go was committed, so it should be stale due to main.go change
+	if result.Status != StatusStale {
+		t.Errorf("Status = %v, want %v", result.Status, StatusStale)
+	}
+}
+
+func TestCheck_ConfigDefaults_IgnoreTestFiles(t *testing.T) {
+	// Config defaults should allow ignoring test files globally
+	tmpDir := setupGitRepo(t)
+
+	// Create only a test file change
+	gitCommit(t, tmpDir, "docs/readme.md", "# Readme", "Add docs")
+	gitCommit(t, tmpDir, "src/main_test.go", "package main", "Add test")
+
+	gitClient, err := git.New(tmpDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Doc has watch but no ignore - should inherit ignore from defaults
+	doc := &document.Document{
+		Path: filepath.Join(tmpDir, "docs/readme.md"),
+		Freshness: &document.Freshness{
+			LastReviewed: time.Now().AddDate(0, 0, -1).Format("2006-01-02"),
+			Strategy:     "code_changes",
+			Watch:        []string{"src/**/*.go"},
+			// No Ignore - inherits from config defaults
+		},
+	}
+
+	defaults := &DefaultPatterns{
+		Ignore: []string{"**/*_test.go"},
+	}
+
+	checker := NewChecker(gitClient, tmpDir, defaults)
+	result := checker.Check(doc)
+
+	// Only test file changed, which is ignored - should be fresh
+	if result.Status != StatusFresh {
+		t.Errorf("Status = %v, want %v (test file should be ignored via config defaults)", result.Status, StatusFresh)
+	}
+}
+
+func TestCheck_ConfigDefaults_InheritWatchWhenIgnoreSet(t *testing.T) {
+	// When doc has ignore but no watch, it should inherit watch from config defaults
+	tmpDir := setupGitRepo(t)
+
+	gitCommit(t, tmpDir, "docs/readme.md", "# Readme", "Add docs")
+	gitCommit(t, tmpDir, "cmd/main.go", "package main", "Add cmd")
+	gitCommit(t, tmpDir, "scripts/build.sh", "#!/bin/bash", "Add script")
+
+	gitClient, err := git.New(tmpDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Doc has ignore but no watch - should inherit watch from config defaults
+	doc := &document.Document{
+		Path: filepath.Join(tmpDir, "docs/readme.md"),
+		Freshness: &document.Freshness{
+			LastReviewed: time.Now().AddDate(0, 0, -1).Format("2006-01-02"),
+			Strategy:     "code_changes",
+			// No Watch - inherits from config defaults
+			Ignore: []string{"scripts/**"}, // Ignore scripts
+		},
+	}
+
+	defaults := &DefaultPatterns{
+		Watch: []string{"cmd/**/*.go", "internal/**/*.go"},
+	}
+
+	checker := NewChecker(gitClient, tmpDir, defaults)
+	result := checker.Check(doc)
+
+	// cmd/main.go changed and is watched via defaults - should be stale
+	if result.Status != StatusStale {
+		t.Errorf("Status = %v, want %v (should detect cmd change via inherited watch)", result.Status, StatusStale)
+	}
+}
+
+func TestCheck_ConfigDefaults_UsedWhenNoFrontmatterPatterns(t *testing.T) {
+	// When doc has neither watch nor ignore, config defaults should be used
+	tmpDir := setupGitRepo(t)
+
+	gitCommit(t, tmpDir, "docs/readme.md", "# Readme", "Add docs")
+	gitCommit(t, tmpDir, "internal/pkg/lib.go", "package pkg", "Add lib")
+
+	gitClient, err := git.New(tmpDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Doc has no watch or ignore
+	doc := &document.Document{
+		Path: filepath.Join(tmpDir, "docs/readme.md"),
+		Freshness: &document.Freshness{
+			LastReviewed: time.Now().AddDate(0, 0, -1).Format("2006-01-02"),
+			Strategy:     "code_changes",
+			// No Watch, no Ignore - uses config defaults
+		},
+	}
+
+	defaults := &DefaultPatterns{
+		Watch:  []string{"internal/**/*.go"},
+		Ignore: []string{"**/*_test.go"},
+	}
+
+	checker := NewChecker(gitClient, tmpDir, defaults)
+	result := checker.Check(doc)
+
+	// internal/pkg/lib.go changed and matches config defaults watch
+	if result.Status != StatusStale {
+		t.Errorf("Status = %v, want %v (config defaults should detect change)", result.Status, StatusStale)
+	}
+}
+
+func TestCheck_ConfigDefaults_FrontmatterTakesPriority(t *testing.T) {
+	// Explicit frontmatter patterns should take priority over config defaults
+	tmpDir := setupGitRepo(t)
+
+	gitCommit(t, tmpDir, "docs/readme.md", "# Readme", "Add docs")
+	gitCommit(t, tmpDir, "internal/pkg/lib.go", "package pkg", "Add lib")
+	gitCommit(t, tmpDir, "cmd/main.go", "package main", "Add cmd")
+
+	gitClient, err := git.New(tmpDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Doc has explicit watch and ignore - should NOT use config defaults
+	doc := &document.Document{
+		Path: filepath.Join(tmpDir, "docs/readme.md"),
+		Freshness: &document.Freshness{
+			LastReviewed: time.Now().AddDate(0, 0, -1).Format("2006-01-02"),
+			Strategy:     "code_changes",
+			Watch:        []string{"cmd/**/*.go"}, // Only watch cmd
+			Ignore:       []string{"cmd/debug/**"}, // Ignore debug
+		},
+	}
+
+	// Config defaults watch internal, but frontmatter overrides
+	defaults := &DefaultPatterns{
+		Watch:  []string{"internal/**/*.go"},
+		Ignore: []string{"**/*_test.go"},
+	}
+
+	checker := NewChecker(gitClient, tmpDir, defaults)
+	result := checker.Check(doc)
+
+	// cmd/main.go changed (watched by frontmatter) - should be stale
+	// internal/pkg/lib.go changed but NOT watched (frontmatter overrides defaults)
+	if result.Status != StatusStale {
+		t.Errorf("Status = %v, want %v", result.Status, StatusStale)
+	}
+	if result.Reason == "" || !contains(result.Reason, "cmd/main.go") {
+		t.Errorf("Reason should mention cmd/main.go, got: %s", result.Reason)
+	}
+}
+
+func TestCheck_ConfigDefaults_NilDefaultsStillWorks(t *testing.T) {
+	// When defaults is nil, existing behavior (smart defaults) should work
+	tmpDir := setupGitRepo(t)
+
+	gitCommit(t, tmpDir, "subsystem/docs/readme.md", "# Readme", "Add docs")
+	gitCommit(t, tmpDir, "subsystem/src/main.go", "package main", "Add code")
+
+	gitClient, err := git.New(tmpDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	doc := &document.Document{
+		Path: filepath.Join(tmpDir, "subsystem/docs/readme.md"),
+		Freshness: &document.Freshness{
+			LastReviewed: time.Now().AddDate(0, 0, -1).Format("2006-01-02"),
+			Strategy:     "code_changes",
+			// No Watch, no Ignore
+		},
+	}
+
+	// nil defaults - should fall back to smart defaults
+	checker := NewChecker(gitClient, tmpDir, nil)
+	result := checker.Check(doc)
+
+	// Smart defaults should detect subsystem/src/main.go change
+	if result.Status != StatusStale {
+		t.Errorf("Status = %v, want %v (smart defaults should work with nil config defaults)", result.Status, StatusStale)
+	}
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsHelper(s, substr))
+}
+
+func containsHelper(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }
