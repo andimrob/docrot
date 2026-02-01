@@ -39,17 +39,36 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	// Determine root directory
-	root := "."
-	if len(args) > 0 {
-		root = args[0]
-	}
+	var paths []string
 
-	// Find all docs
-	s := scanner.New(root, cfg.Patterns, cfg.Exclude)
-	paths, err := s.Scan()
-	if err != nil {
-		return fmt.Errorf("failed to scan for docs: %w", err)
+	if len(args) > 0 {
+		// Check if args are files or directories
+		for _, arg := range args {
+			info, err := os.Stat(arg)
+			if err != nil {
+				return fmt.Errorf("failed to stat %s: %w", arg, err)
+			}
+			if info.IsDir() {
+				// Scan directory for docs
+				s := scanner.New(arg, cfg.Patterns, cfg.Exclude)
+				dirPaths, err := s.Scan()
+				if err != nil {
+					return fmt.Errorf("failed to scan for docs: %w", err)
+				}
+				paths = append(paths, dirPaths...)
+			} else {
+				// Use file directly
+				paths = append(paths, arg)
+			}
+		}
+	} else {
+		// Default: scan current directory
+		s := scanner.New(".", cfg.Patterns, cfg.Exclude)
+		var err error
+		paths, err = s.Scan()
+		if err != nil {
+			return fmt.Errorf("failed to scan for docs: %w", err)
+		}
 	}
 
 	if len(paths) == 0 {
@@ -58,7 +77,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	}
 
 	// Set up git client
-	gitClient, _ := git.New(root)
+	gitClient, _ := git.New(".")
 
 	// Convert config defaults to freshness defaults
 	var defaults *freshness.DefaultPatterns
