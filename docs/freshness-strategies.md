@@ -68,8 +68,8 @@ docrot:
 ```
 
 Status:
-- Fresh: if today is before 2024-07-01
-- Stale: if today is on or after 2024-07-01
+- Fresh: if today is before 2026-08-01
+- Stale: if today is on or after 2026-08-01
 
 ## until_date
 
@@ -82,7 +82,7 @@ Documentation expires on a specific calendar date.
 docrot:
   strategy: until_date
   last_reviewed: "2026-02-01"
-  expires: "2024-12-31"  # Required for until_date strategy
+  expires: "2026-12-31"  # Required for until_date strategy
 ---
 ```
 
@@ -108,15 +108,15 @@ Date format: `YYYY-MM-DD` (ISO 8601)
 docrot:
   strategy: until_date
   last_reviewed: "2026-02-01"
-  expires: "2024-12-31"  # Valid through end of year
+  expires: "2026-12-31"  # Valid through end of year
 ---
 
-# 2024 Holiday Support Schedule
+# 2026 Holiday Support Schedule
 ```
 
 Status:
-- Fresh: if today is before or on 2024-12-31
-- Stale: if today is after 2024-12-31
+- Fresh: if today is before or on 2026-12-31
+- Stale: if today is after 2026-12-31
 
 ## code_changes
 
@@ -185,8 +185,8 @@ docrot:
 ```
 
 Status:
-- Fresh: if no files matching `internal/api/**/*.go` or `cmd/server/**/*.go` changed after 2024-01-15
-- Stale: if any watched files changed after 2024-01-15
+- Fresh: if no files matching `internal/api/**/*.go` or `cmd/server/**/*.go` changed after 2026-02-01
+- Stale: if any watched files changed after 2026-02-01
 
 ## Strategy Selection Guide
 
