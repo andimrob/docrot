@@ -1,14 +1,3 @@
----
-docrot:
-  last_reviewed: "2026-01-31"
-  strategy: code_changes
-  watch:
-    - "cmd/**/*.go"
-    - "internal/**/*.go"
-  ignore:
-    - "**/*_test.go"
----
-
 # docrot
 
 Detect stale documentation. Keep your docs fresh.
