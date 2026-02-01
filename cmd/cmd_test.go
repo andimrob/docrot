@@ -445,6 +445,185 @@ docrot:
 	}
 }
 
+func TestCheckCommand_NonexistentFile(t *testing.T) {
+	configPath = ""
+	format = "text"
+	quiet = false
+
+	err := runCheck(nil, []string{"/nonexistent/path/file.md"})
+
+	if err == nil {
+		t.Error("runCheck() should return error for nonexistent file")
+	}
+
+	if !strings.Contains(err.Error(), "failed to stat") {
+		t.Errorf("Error should mention 'failed to stat', got: %v", err)
+	}
+}
+
+func TestCheckCommand_MixedFilesAndDirs(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a doc directory with a file
+	docDir := filepath.Join(tmpDir, "doc")
+	os.MkdirAll(docDir, 0755)
+
+	dirDoc := `---
+docrot:
+  last_reviewed: "2026-01-20"
+  strategy: interval
+  interval: 90d
+---
+# Doc in directory
+`
+	os.WriteFile(filepath.Join(docDir, "in-dir.md"), []byte(dirDoc), 0644)
+
+	// Create a standalone file
+	standaloneDoc := `---
+docrot:
+  last_reviewed: "2026-01-20"
+  strategy: interval
+  interval: 90d
+---
+# Standalone Doc
+`
+	standalonePath := filepath.Join(tmpDir, "standalone.md")
+	os.WriteFile(standalonePath, []byte(standaloneDoc), 0644)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	configPath = ""
+	format = "text"
+	quiet = false
+
+	// Pass both a directory and a file
+	err := runCheck(nil, []string{tmpDir, standalonePath})
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	output := buf.String()
+
+	if err != nil {
+		t.Errorf("runCheck() error = %v", err)
+	}
+
+	// Both files should be in output
+	if !strings.Contains(output, "in-dir.md") {
+		t.Errorf("Output should contain in-dir.md, got: %s", output)
+	}
+	if !strings.Contains(output, "standalone.md") {
+		t.Errorf("Output should contain standalone.md, got: %s", output)
+	}
+}
+
+func TestCheckCommand_MultipleFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create two doc files
+	freshDoc := `---
+docrot:
+  last_reviewed: "2026-01-20"
+  strategy: interval
+  interval: 90d
+---
+# Fresh Doc
+`
+	staleDoc := `---
+docrot:
+  last_reviewed: "2020-01-01"
+  strategy: interval
+  interval: 30d
+---
+# Stale Doc
+`
+	freshPath := filepath.Join(tmpDir, "fresh.md")
+	stalePath := filepath.Join(tmpDir, "stale.md")
+	os.WriteFile(freshPath, []byte(freshDoc), 0644)
+	os.WriteFile(stalePath, []byte(staleDoc), 0644)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	configPath = ""
+	format = "text"
+	quiet = false
+
+	// Pass multiple file paths
+	err := runCheck(nil, []string{freshPath, stalePath})
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	output := buf.String()
+
+	// Should return error because one doc is stale
+	if err != ErrStaleDocsFound {
+		t.Errorf("runCheck() error = %v, want ErrStaleDocsFound", err)
+	}
+
+	// Both files should be in output
+	if !strings.Contains(output, "fresh.md") {
+		t.Errorf("Output should contain fresh.md, got: %s", output)
+	}
+	if !strings.Contains(output, "stale.md") {
+		t.Errorf("Output should contain stale.md, got: %s", output)
+	}
+}
+
+func TestCheckCommand_SingleFile(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a doc file (not in a doc/ subdirectory)
+	doc := `---
+docrot:
+  last_reviewed: "2026-01-20"
+  strategy: interval
+  interval: 90d
+---
+# Single File Test
+`
+	docPath := filepath.Join(tmpDir, "test.md")
+	os.WriteFile(docPath, []byte(doc), 0644)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	configPath = ""
+	format = "text"
+	quiet = false
+
+	// Pass the file path directly, not a directory
+	err := runCheck(nil, []string{docPath})
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	output := buf.String()
+
+	if err != nil {
+		t.Errorf("runCheck() error = %v", err)
+	}
+
+	if !strings.Contains(output, "test.md") {
+		t.Errorf("Output should contain test.md, got: %s", output)
+	}
+
+	if !strings.Contains(output, "fresh") {
+		t.Errorf("Output should contain 'fresh', got: %s", output)
+	}
+}
+
 func TestFilesCommand_JSONFormat(t *testing.T) {
 	tmpDir := t.TempDir()
 
