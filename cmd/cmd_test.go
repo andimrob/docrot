@@ -382,3 +382,116 @@ docrot:
 		t.Errorf("File should contain new date, got: %s", string(content))
 	}
 }
+
+func TestFilesCommand_WithExplicitPatterns(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a fake .git directory so root detection works
+	os.MkdirAll(filepath.Join(tmpDir, ".git"), 0755)
+
+	// Create directory structure
+	os.MkdirAll(filepath.Join(tmpDir, "subsystem/src"), 0755)
+	os.MkdirAll(filepath.Join(tmpDir, "subsystem/docs"), 0755)
+
+	// Create source files
+	os.WriteFile(filepath.Join(tmpDir, "subsystem/src/main.go"), []byte("package main"), 0644)
+	os.WriteFile(filepath.Join(tmpDir, "subsystem/src/lib.go"), []byte("package lib"), 0644)
+
+	// Create doc with explicit watch/ignore patterns
+	doc := `---
+docrot:
+  last_reviewed: "2024-01-01"
+  strategy: interval
+  interval: 90d
+  watch:
+    - "subsystem/**/*"
+  ignore:
+    - "subsystem/docs/**"
+---
+# Doc
+`
+	docPath := filepath.Join(tmpDir, "subsystem/docs/readme.md")
+	os.WriteFile(docPath, []byte(doc), 0644)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	format = "text"
+	err := runFiles(nil, []string{docPath})
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	output := buf.String()
+
+	if err != nil {
+		t.Errorf("runFiles() error = %v", err)
+	}
+
+	// Should include source files
+	if !strings.Contains(output, "main.go") {
+		t.Errorf("Output should contain main.go, got: %s", output)
+	}
+	if !strings.Contains(output, "lib.go") {
+		t.Errorf("Output should contain lib.go, got: %s", output)
+	}
+
+	// Should NOT include docs (ignored)
+	if strings.Contains(output, "readme.md") {
+		t.Errorf("Output should NOT contain readme.md (ignored), got: %s", output)
+	}
+}
+
+func TestFilesCommand_JSONFormat(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a fake .git directory so root detection works
+	os.MkdirAll(filepath.Join(tmpDir, ".git"), 0755)
+
+	os.MkdirAll(filepath.Join(tmpDir, "src"), 0755)
+	os.MkdirAll(filepath.Join(tmpDir, "docs"), 0755)
+
+	os.WriteFile(filepath.Join(tmpDir, "src/main.go"), []byte("package main"), 0644)
+
+	doc := `---
+docrot:
+  last_reviewed: "2024-01-01"
+  strategy: interval
+  interval: 90d
+  watch:
+    - "src/**/*"
+---
+# Doc
+`
+	docPath := filepath.Join(tmpDir, "docs/readme.md")
+	os.WriteFile(docPath, []byte(doc), 0644)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	format = "json"
+	err := runFiles(nil, []string{docPath})
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	output := buf.String()
+
+	if err != nil {
+		t.Errorf("runFiles() error = %v", err)
+	}
+
+	// Should be valid JSON with files array
+	if !strings.Contains(output, `"files"`) {
+		t.Errorf("JSON output should contain files field, got: %s", output)
+	}
+	if !strings.Contains(output, "main.go") {
+		t.Errorf("JSON output should contain main.go, got: %s", output)
+	}
+}

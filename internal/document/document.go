@@ -20,6 +20,7 @@ type Freshness struct {
 	Interval     string   `yaml:"interval,omitempty"`
 	Expires      string   `yaml:"expires,omitempty"`
 	Watch        []string `yaml:"watch,omitempty"`
+	Ignore       []string `yaml:"ignore,omitempty"`
 }
 
 type frontmatterWrapper struct {

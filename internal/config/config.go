@@ -18,6 +18,7 @@ type Defaults struct {
 	Strategy string   `yaml:"strategy"`
 	Interval string   `yaml:"interval"`
 	Watch    []string `yaml:"watch"`
+	Ignore   []string `yaml:"ignore"`
 }
 
 func DefaultConfig() *Config {
@@ -34,12 +35,8 @@ func DefaultConfig() *Config {
 		Defaults: &Defaults{
 			Strategy: "interval",
 			Interval: "180d",
-			Watch: []string{
-				"**/*.rb",
-				"**/*.go",
-				"**/*.ts",
-				"**/*.tsx",
-			},
+			// Watch and Ignore are nil by default; smart defaults are computed
+			// based on document location (watch parent dir, ignore docs dir)
 		},
 	}
 }
@@ -86,6 +83,9 @@ func Load(path string) (*Config, error) {
 		}
 		if len(fileCfg.Defaults.Watch) > 0 {
 			cfg.Defaults.Watch = fileCfg.Defaults.Watch
+		}
+		if len(fileCfg.Defaults.Ignore) > 0 {
+			cfg.Defaults.Ignore = fileCfg.Defaults.Ignore
 		}
 	}
 

@@ -18,8 +18,8 @@ type parsedDoc struct {
 }
 
 // Run processes files in parallel and returns freshness results.
-// It optimizes code_changes strategy by building a FileChangeIndex once
-// instead of making individual git calls per file.
+// It optimizes by building a FileChangeIndex once instead of making
+// individual git calls per file for code change detection.
 func Run(paths []string, gitClient *git.Client, workers int) []freshness.Result {
 	if workers <= 0 {
 		workers = runtime.NumCPU()
@@ -28,10 +28,12 @@ func Run(paths []string, gitClient *git.Client, workers int) []freshness.Result 
 	// Phase 1: Parse all documents in parallel
 	parsedDocs := parseAllDocs(paths, workers)
 
-	// Phase 2: Build FileChangeIndex if any docs use code_changes strategy
+	// Phase 2: Build FileChangeIndex for all docs (all strategies check for code changes)
 	var index *git.FileChangeIndex
+	var repoRoot string
 	if gitClient != nil {
-		oldestDate := findOldestCodeChangesDate(parsedDocs)
+		repoRoot = gitClient.RepoRoot()
+		oldestDate := findOldestLastReviewedDate(parsedDocs)
 		if !oldestDate.IsZero() {
 			// Build index starting from oldest date to minimize git output
 			var err error
@@ -44,7 +46,7 @@ func Run(paths []string, gitClient *git.Client, workers int) []freshness.Result 
 	}
 
 	// Phase 3: Check all documents in parallel using the index
-	return checkAllDocs(parsedDocs, gitClient, index, workers)
+	return checkAllDocs(parsedDocs, gitClient, repoRoot, index, workers)
 }
 
 // parseAllDocs parses all documents in parallel
@@ -82,17 +84,14 @@ func parseAllDocs(paths []string, workers int) []parsedDoc {
 	return parsed
 }
 
-// findOldestCodeChangesDate finds the oldest last_reviewed date among docs
-// using code_changes strategy. Returns zero time if none found.
-func findOldestCodeChangesDate(docs []parsedDoc) time.Time {
+// findOldestLastReviewedDate finds the oldest last_reviewed date among all docs
+// with freshness configuration. Returns zero time if none found.
+// All strategies check for code changes, so we need the oldest date across all docs.
+func findOldestLastReviewedDate(docs []parsedDoc) time.Time {
 	var oldest time.Time
 
 	for _, pd := range docs {
 		if pd.err != nil || pd.doc == nil || pd.doc.Freshness == nil {
-			continue
-		}
-
-		if pd.doc.Freshness.Strategy != "code_changes" {
 			continue
 		}
 
@@ -110,12 +109,12 @@ func findOldestCodeChangesDate(docs []parsedDoc) time.Time {
 }
 
 // checkAllDocs checks all parsed documents in parallel
-func checkAllDocs(docs []parsedDoc, gitClient *git.Client, index *git.FileChangeIndex, workers int) []freshness.Result {
+func checkAllDocs(docs []parsedDoc, gitClient *git.Client, repoRoot string, index *git.FileChangeIndex, workers int) []freshness.Result {
 	jobs := make(chan parsedDoc, len(docs))
 	results := make(chan freshness.Result, len(docs))
 
 	var wg sync.WaitGroup
-	checker := freshness.NewChecker(gitClient)
+	checker := freshness.NewChecker(gitClient, repoRoot)
 
 	for i := 0; i < workers; i++ {
 		wg.Add(1)
