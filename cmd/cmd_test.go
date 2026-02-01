@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -672,5 +673,247 @@ docrot:
 	}
 	if !strings.Contains(output, "main.go") {
 		t.Errorf("JSON output should contain main.go, got: %s", output)
+	}
+}
+
+func TestCheckCommand_PathsInDifferentRepos_ReturnsError(t *testing.T) {
+	// Create two separate git repos
+	repo1 := t.TempDir()
+	repo2 := t.TempDir()
+
+	// Initialize both as git repos
+	for _, repo := range []string{repo1, repo2} {
+		initGitRepo(t, repo)
+	}
+
+	// Create doc directories and files in each repo
+	doc1Dir := filepath.Join(repo1, "doc")
+	doc2Dir := filepath.Join(repo2, "doc")
+	os.MkdirAll(doc1Dir, 0755)
+	os.MkdirAll(doc2Dir, 0755)
+
+	doc := `---
+docrot:
+  last_reviewed: "2026-01-20"
+  strategy: interval
+  interval: 90d
+---
+# Doc
+`
+	doc1Path := filepath.Join(doc1Dir, "readme.md")
+	doc2Path := filepath.Join(doc2Dir, "readme.md")
+	os.WriteFile(doc1Path, []byte(doc), 0644)
+	os.WriteFile(doc2Path, []byte(doc), 0644)
+
+	configPath = ""
+	format = "text"
+	quiet = false
+
+	// Pass paths from two different repos
+	err := runCheck(nil, []string{doc1Path, doc2Path})
+
+	if err == nil {
+		t.Error("runCheck() should return error when paths are in different repos")
+	}
+
+	if err != nil && !strings.Contains(err.Error(), "different git repositories") {
+		t.Errorf("Error should mention 'different git repositories', got: %v", err)
+	}
+}
+
+func TestCheckCommand_PathsInSameRepo_Succeeds(t *testing.T) {
+	tmpDir := t.TempDir()
+	initGitRepo(t, tmpDir)
+
+	// Create two doc directories in the same repo
+	doc1Dir := filepath.Join(tmpDir, "module1/doc")
+	doc2Dir := filepath.Join(tmpDir, "module2/doc")
+	os.MkdirAll(doc1Dir, 0755)
+	os.MkdirAll(doc2Dir, 0755)
+
+	doc := `---
+docrot:
+  last_reviewed: "2026-01-20"
+  strategy: interval
+  interval: 90d
+---
+# Doc
+`
+	doc1Path := filepath.Join(doc1Dir, "readme.md")
+	doc2Path := filepath.Join(doc2Dir, "readme.md")
+	os.WriteFile(doc1Path, []byte(doc), 0644)
+	os.WriteFile(doc2Path, []byte(doc), 0644)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	configPath = ""
+	format = "text"
+	quiet = false
+
+	err := runCheck(nil, []string{doc1Path, doc2Path})
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	output := buf.String()
+
+	if err != nil {
+		t.Errorf("runCheck() error = %v", err)
+	}
+
+	// Both files should be checked
+	if !strings.Contains(output, "module1") {
+		t.Errorf("Output should contain module1, got: %s", output)
+	}
+	if !strings.Contains(output, "module2") {
+		t.Errorf("Output should contain module2, got: %s", output)
+	}
+}
+
+func TestCheckCommand_DirectoryInDifferentRepo_ReturnsError(t *testing.T) {
+	// Create two separate git repos
+	repo1 := t.TempDir()
+	repo2 := t.TempDir()
+
+	initGitRepo(t, repo1)
+	initGitRepo(t, repo2)
+
+	// Create doc in repo1 and directory with docs in repo2
+	doc1Dir := filepath.Join(repo1, "doc")
+	doc2Dir := filepath.Join(repo2, "doc")
+	os.MkdirAll(doc1Dir, 0755)
+	os.MkdirAll(doc2Dir, 0755)
+
+	doc := `---
+docrot:
+  last_reviewed: "2026-01-20"
+  strategy: interval
+  interval: 90d
+---
+# Doc
+`
+	doc1Path := filepath.Join(doc1Dir, "readme.md")
+	os.WriteFile(doc1Path, []byte(doc), 0644)
+	os.WriteFile(filepath.Join(doc2Dir, "other.md"), []byte(doc), 0644)
+
+	configPath = ""
+	format = "text"
+	quiet = false
+
+	// Pass a file from repo1 and directory from repo2
+	err := runCheck(nil, []string{doc1Path, repo2})
+
+	if err == nil {
+		t.Error("runCheck() should return error when paths are in different repos")
+	}
+
+	if err != nil && !strings.Contains(err.Error(), "different git repositories") {
+		t.Errorf("Error should mention 'different git repositories', got: %v", err)
+	}
+}
+
+func TestCheckCommand_SingleFileUsesCorrectGitRoot(t *testing.T) {
+	tmpDir := t.TempDir()
+	initGitRepo(t, tmpDir)
+
+	// Create and commit a source file
+	srcDir := filepath.Join(tmpDir, "src")
+	os.MkdirAll(srcDir, 0755)
+	srcPath := filepath.Join(srcDir, "main.go")
+	os.WriteFile(srcPath, []byte("package main"), 0644)
+	gitAdd(t, tmpDir, "src/main.go")
+	gitCommit(t, tmpDir, "Add source")
+
+	// Create doc that watches src
+	docDir := filepath.Join(tmpDir, "doc")
+	os.MkdirAll(docDir, 0755)
+
+	// Use a very old date so that any code change makes it stale
+	doc := `---
+docrot:
+  last_reviewed: "2020-01-01"
+  strategy: code_changes
+  watch:
+    - "src/**/*.go"
+---
+# Doc
+`
+	docPath := filepath.Join(docDir, "readme.md")
+	os.WriteFile(docPath, []byte(doc), 0644)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	configPath = ""
+	format = "text"
+	quiet = false
+
+	// Run from a different directory but pass absolute path
+	oldWd, _ := os.Getwd()
+	os.Chdir(t.TempDir()) // Change to unrelated directory
+	defer os.Chdir(oldWd)
+
+	err := runCheck(nil, []string{docPath})
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	output := buf.String()
+
+	// Should detect the doc as stale because src/main.go was committed
+	if err != ErrStaleDocsFound {
+		t.Errorf("runCheck() error = %v, want ErrStaleDocsFound (git should detect code changes)", err)
+	}
+
+	if !strings.Contains(output, "stale") {
+		t.Errorf("Output should show doc as stale, got: %s", output)
+	}
+}
+
+// Helper to initialize a git repo for testing
+func initGitRepo(t *testing.T, dir string) {
+	t.Helper()
+	cmds := [][]string{
+		{"git", "init"},
+		{"git", "config", "user.email", "test@test.com"},
+		{"git", "config", "user.name", "Test"},
+		{"git", "config", "commit.gpgsign", "false"},
+	}
+	for _, args := range cmds {
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git command %v failed: %v\n%s", args, err, out)
+		}
+	}
+	// Create initial commit so repo is valid
+	placeholderPath := filepath.Join(dir, ".gitkeep")
+	os.WriteFile(placeholderPath, []byte(""), 0644)
+	gitAdd(t, dir, ".gitkeep")
+	gitCommit(t, dir, "Initial commit")
+}
+
+func gitAdd(t *testing.T, dir, file string) {
+	t.Helper()
+	cmd := exec.Command("git", "add", file)
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git add failed: %v\n%s", err, out)
+	}
+}
+
+func gitCommit(t *testing.T, dir, message string) {
+	t.Helper()
+	cmd := exec.Command("git", "commit", "-m", message)
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git commit failed: %v\n%s", err, out)
 	}
 }

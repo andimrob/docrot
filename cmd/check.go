@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/andimrob/docrot/internal/checker"
 	"github.com/andimrob/docrot/internal/config"
@@ -16,6 +17,9 @@ import (
 
 // ErrStaleDocsFound is returned when stale docs are found
 var ErrStaleDocsFound = errors.New("stale documentation found")
+
+// ErrMultipleRepos is returned when paths span multiple git repositories
+var ErrMultipleRepos = errors.New("paths are in different git repositories")
 
 var quiet bool
 
@@ -40,8 +44,10 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	}
 
 	var paths []string
+	var inputPaths []string // Track original input paths for git root validation
 
 	if len(args) > 0 {
+		inputPaths = args
 		// Check if args are files or directories
 		for _, arg := range args {
 			info, err := os.Stat(arg)
@@ -62,6 +68,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 			}
 		}
 	} else {
+		inputPaths = []string{"."}
 		// Default: scan current directory
 		s := scanner.New(".", cfg.Patterns, cfg.Exclude)
 		var err error
@@ -76,8 +83,17 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Set up git client
-	gitClient, _ := git.New(".")
+	// Find git root from input paths, ensuring all are in the same repo
+	repoRoot, err := findCommonGitRoot(inputPaths)
+	if err != nil {
+		return err
+	}
+
+	// Set up git client using the derived repo root
+	var gitClient *git.Client
+	if repoRoot != "" {
+		gitClient, _ = git.New(repoRoot)
+	}
 
 	// Convert config defaults to freshness defaults
 	var defaults *freshness.DefaultPatterns
@@ -125,4 +141,44 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+// findCommonGitRoot finds the git repository root for the given paths.
+// Returns an error if paths are in different git repositories.
+// Returns empty string if no paths are in a git repository.
+func findCommonGitRoot(paths []string) (string, error) {
+	var commonRoot string
+
+	for _, p := range paths {
+		// Convert to absolute path
+		absPath, err := filepath.Abs(p)
+		if err != nil {
+			continue
+		}
+
+		// For files, use parent directory for git root lookup
+		info, err := os.Stat(absPath)
+		if err != nil {
+			continue
+		}
+		lookupPath := absPath
+		if !info.IsDir() {
+			lookupPath = filepath.Dir(absPath)
+		}
+
+		// Find git root for this path
+		root, err := git.FindRepoRoot(lookupPath)
+		if err != nil {
+			// Not in a git repo, skip
+			continue
+		}
+
+		if commonRoot == "" {
+			commonRoot = root
+		} else if commonRoot != root {
+			return "", fmt.Errorf("%w: %s and %s", ErrMultipleRepos, commonRoot, root)
+		}
+	}
+
+	return commonRoot, nil
 }
