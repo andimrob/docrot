@@ -183,18 +183,9 @@ func TestScan_WildcardPattern(t *testing.T) {
 func TestScan_RespectsGitIgnore(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Init a git repo
-	for _, args := range [][]string{
-		{"git", "init"},
-		{"git", "config", "user.email", "test@test.com"},
-		{"git", "config", "user.name", "Test"},
-		{"git", "config", "commit.gpgsign", "false"},
-	} {
-		cmd := exec.Command(args[0], args[1:]...)
-		cmd.Dir = tmpDir
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git command %v failed: %v\n%s", args, err, out)
-		}
+	// Init a git repo (no commits needed; git check-ignore only requires .git to exist)
+	if out, err := exec.Command("git", "init", tmpDir).CombinedOutput(); err != nil {
+		t.Fatalf("git init failed: %v\n%s", err, out)
 	}
 
 	// Create two doc dirs: one gitignored, one not
@@ -227,17 +218,8 @@ func TestScan_GitRepo_NothingIgnored(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Init a git repo with no .gitignore
-	for _, args := range [][]string{
-		{"git", "init"},
-		{"git", "config", "user.email", "test@test.com"},
-		{"git", "config", "user.name", "Test"},
-		{"git", "config", "commit.gpgsign", "false"},
-	} {
-		cmd := exec.Command(args[0], args[1:]...)
-		cmd.Dir = tmpDir
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git command %v failed: %v\n%s", args, err, out)
-		}
+	if out, err := exec.Command("git", "init", tmpDir).CombinedOutput(); err != nil {
+		t.Fatalf("git init failed: %v\n%s", err, out)
 	}
 
 	docDir := filepath.Join(tmpDir, "docs")
@@ -260,17 +242,8 @@ func TestScan_GitRepo_NothingIgnored(t *testing.T) {
 func TestScan_RespectsGitIgnore_FileLevel(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	for _, args := range [][]string{
-		{"git", "init"},
-		{"git", "config", "user.email", "test@test.com"},
-		{"git", "config", "user.name", "Test"},
-		{"git", "config", "commit.gpgsign", "false"},
-	} {
-		cmd := exec.Command(args[0], args[1:]...)
-		cmd.Dir = tmpDir
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git command %v failed: %v\n%s", args, err, out)
-		}
+	if out, err := exec.Command("git", "init", tmpDir).CombinedOutput(); err != nil {
+		t.Fatalf("git init failed: %v\n%s", err, out)
 	}
 
 	docDir := filepath.Join(tmpDir, "docs")
