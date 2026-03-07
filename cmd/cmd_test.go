@@ -2,11 +2,13 @@ package cmd
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestCheckCommand_WithStaleDoc(t *testing.T) {
@@ -60,14 +62,14 @@ func TestCheckCommand_WithFreshDoc(t *testing.T) {
 	os.MkdirAll(docDir, 0755)
 
 	// Create a fresh doc (using current date)
-	freshDoc := `---
+	freshDoc := fmt.Sprintf(`---
 docrot:
-  last_reviewed: "2099-01-20"
+  last_reviewed: "%s"
   strategy: interval
   interval: 90d
 ---
 # Fresh Doc
-`
+`, recentDate())
 	os.WriteFile(filepath.Join(docDir, "fresh.md"), []byte(freshDoc), 0644)
 
 	oldStdout := os.Stdout
@@ -101,14 +103,14 @@ func TestCheckCommand_JSONFormat(t *testing.T) {
 	docDir := filepath.Join(tmpDir, "doc")
 	os.MkdirAll(docDir, 0755)
 
-	doc := `---
+	doc := fmt.Sprintf(`---
 docrot:
-  last_reviewed: "2099-01-20"
+  last_reviewed: "%s"
   strategy: interval
   interval: 90d
 ---
 # Doc
-`
+`, recentDate())
 	os.WriteFile(filepath.Join(docDir, "test.md"), []byte(doc), 0644)
 
 	oldStdout := os.Stdout
@@ -260,14 +262,14 @@ func TestCheckCommand_PatternFlag(t *testing.T) {
 	rfcsDir := filepath.Join(tmpDir, "rfcs")
 	os.MkdirAll(rfcsDir, 0755)
 
-	doc := `---
+	doc := fmt.Sprintf(`---
 docrot:
-  last_reviewed: "2099-01-20"
+  last_reviewed: "%s"
   strategy: interval
   interval: 90d
 ---
 # RFC 001
-`
+`, recentDate())
 	os.WriteFile(filepath.Join(rfcsDir, "rfc-001.md"), []byte(doc), 0644)
 
 	oldStdout := os.Stdout
@@ -514,25 +516,25 @@ func TestCheckCommand_MixedFilesAndDirs(t *testing.T) {
 	docDir := filepath.Join(tmpDir, "doc")
 	os.MkdirAll(docDir, 0755)
 
-	dirDoc := `---
+	dirDoc := fmt.Sprintf(`---
 docrot:
-  last_reviewed: "2099-01-20"
+  last_reviewed: "%s"
   strategy: interval
   interval: 90d
 ---
 # Doc in directory
-`
+`, recentDate())
 	os.WriteFile(filepath.Join(docDir, "in-dir.md"), []byte(dirDoc), 0644)
 
 	// Create a standalone file
-	standaloneDoc := `---
+	standaloneDoc := fmt.Sprintf(`---
 docrot:
-  last_reviewed: "2099-01-20"
+  last_reviewed: "%s"
   strategy: interval
   interval: 90d
 ---
 # Standalone Doc
-`
+`, recentDate())
 	standalonePath := filepath.Join(tmpDir, "standalone.md")
 	os.WriteFile(standalonePath, []byte(standaloneDoc), 0644)
 
@@ -571,14 +573,14 @@ func TestCheckCommand_MultipleFiles(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create two doc files
-	freshDoc := `---
+	freshDoc := fmt.Sprintf(`---
 docrot:
-  last_reviewed: "2099-01-20"
+  last_reviewed: "%s"
   strategy: interval
   interval: 90d
 ---
 # Fresh Doc
-`
+`, recentDate())
 	staleDoc := `---
 docrot:
   last_reviewed: "2020-01-01"
@@ -628,14 +630,14 @@ func TestCheckCommand_SingleFile(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create a doc file (not in a doc/ subdirectory)
-	doc := `---
+	doc := fmt.Sprintf(`---
 docrot:
-  last_reviewed: "2099-01-20"
+  last_reviewed: "%s"
   strategy: interval
   interval: 90d
 ---
 # Single File Test
-`
+`, recentDate())
 	docPath := filepath.Join(tmpDir, "test.md")
 	os.WriteFile(docPath, []byte(doc), 0644)
 
@@ -737,14 +739,14 @@ func TestCheckCommand_PathsInDifferentRepos_ReturnsError(t *testing.T) {
 	os.MkdirAll(doc1Dir, 0755)
 	os.MkdirAll(doc2Dir, 0755)
 
-	doc := `---
+	doc := fmt.Sprintf(`---
 docrot:
-  last_reviewed: "2099-01-20"
+  last_reviewed: "%s"
   strategy: interval
   interval: 90d
 ---
 # Doc
-`
+`, recentDate())
 	doc1Path := filepath.Join(doc1Dir, "readme.md")
 	doc2Path := filepath.Join(doc2Dir, "readme.md")
 	os.WriteFile(doc1Path, []byte(doc), 0644)
@@ -776,14 +778,14 @@ func TestCheckCommand_PathsInSameRepo_Succeeds(t *testing.T) {
 	os.MkdirAll(doc1Dir, 0755)
 	os.MkdirAll(doc2Dir, 0755)
 
-	doc := `---
+	doc := fmt.Sprintf(`---
 docrot:
-  last_reviewed: "2099-01-20"
+  last_reviewed: "%s"
   strategy: interval
   interval: 90d
 ---
 # Doc
-`
+`, recentDate())
 	doc1Path := filepath.Join(doc1Dir, "readme.md")
 	doc2Path := filepath.Join(doc2Dir, "readme.md")
 	os.WriteFile(doc1Path, []byte(doc), 0644)
@@ -833,14 +835,14 @@ func TestCheckCommand_DirectoryInDifferentRepo_ReturnsError(t *testing.T) {
 	os.MkdirAll(doc1Dir, 0755)
 	os.MkdirAll(doc2Dir, 0755)
 
-	doc := `---
+	doc := fmt.Sprintf(`---
 docrot:
-  last_reviewed: "2099-01-20"
+  last_reviewed: "%s"
   strategy: interval
   interval: 90d
 ---
 # Doc
-`
+`, recentDate())
 	doc1Path := filepath.Join(doc1Dir, "readme.md")
 	os.WriteFile(doc1Path, []byte(doc), 0644)
 	os.WriteFile(filepath.Join(doc2Dir, "other.md"), []byte(doc), 0644)
@@ -1015,14 +1017,14 @@ docrot:
 func TestCheckCommand_QuietFlag(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	freshDoc := `---
+	freshDoc := fmt.Sprintf(`---
 docrot:
-  last_reviewed: "2099-01-20"
+  last_reviewed: "%s"
   strategy: interval
   interval: 90d
 ---
 # Fresh Doc
-`
+`, recentDate())
 	staleDoc := `---
 docrot:
   last_reviewed: "2020-01-01"
@@ -1065,4 +1067,10 @@ docrot:
 	if strings.Contains(output, "fresh.md") {
 		t.Errorf("Quiet output should NOT contain fresh.md, got: %s", output)
 	}
+}
+
+// recentDate returns yesterday's date formatted as YYYY-MM-DD.
+// Using a recent past date ensures docs with a 90d interval are always fresh.
+func recentDate() string {
+	return time.Now().AddDate(0, 0, -1).Format("2006-01-02")
 }
