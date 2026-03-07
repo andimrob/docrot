@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 
 	"gopkg.in/yaml.v3"
@@ -87,6 +88,13 @@ func Load(path string) (*Config, error) {
 		if len(fileCfg.Defaults.Ignore) > 0 {
 			cfg.Defaults.Ignore = fileCfg.Defaults.Ignore
 		}
+	}
+
+	switch cfg.OnMissingFrontmatter {
+	case "", "warn", "skip", "fail", "strict":
+		// valid
+	default:
+		return nil, fmt.Errorf("invalid on_missing_frontmatter value %q: must be warn, skip, fail, or strict", cfg.OnMissingFrontmatter)
 	}
 
 	return cfg, nil
