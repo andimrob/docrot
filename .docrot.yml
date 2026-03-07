@@ -1,9 +1,6 @@
 patterns:
   - "docs/**/*.md"
 
-exclude:
-  - ".worktrees/**"
-
 on_missing_frontmatter: warn
 
 defaults:
