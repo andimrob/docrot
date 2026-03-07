@@ -223,6 +223,78 @@ func TestScan_RespectsGitIgnore(t *testing.T) {
 	}
 }
 
+func TestScan_GitRepo_NothingIgnored(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Init a git repo with no .gitignore
+	for _, args := range [][]string{
+		{"git", "init"},
+		{"git", "config", "user.email", "test@test.com"},
+		{"git", "config", "user.name", "Test"},
+		{"git", "config", "commit.gpgsign", "false"},
+	} {
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = tmpDir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git command %v failed: %v\n%s", args, err, out)
+		}
+	}
+
+	docDir := filepath.Join(tmpDir, "docs")
+	os.MkdirAll(docDir, 0755)
+	os.WriteFile(filepath.Join(docDir, "guide.md"), []byte("# Guide"), 0644)
+	os.WriteFile(filepath.Join(docDir, "api.md"), []byte("# API"), 0644)
+
+	s := New(tmpDir, []string{"**/*.md"}, nil)
+	results, err := s.Scan()
+	if err != nil {
+		t.Fatalf("Scan() error = %v", err)
+	}
+
+	// No .gitignore so all docs should be found
+	if len(results) != 2 {
+		t.Errorf("Scan() found %d files, want 2 (no .gitignore, nothing should be excluded): %v", len(results), results)
+	}
+}
+
+func TestScan_RespectsGitIgnore_FileLevel(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	for _, args := range [][]string{
+		{"git", "init"},
+		{"git", "config", "user.email", "test@test.com"},
+		{"git", "config", "user.name", "Test"},
+		{"git", "config", "commit.gpgsign", "false"},
+	} {
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = tmpDir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git command %v failed: %v\n%s", args, err, out)
+		}
+	}
+
+	docDir := filepath.Join(tmpDir, "docs")
+	os.MkdirAll(docDir, 0755)
+	os.WriteFile(filepath.Join(docDir, "guide.md"), []byte("# Guide"), 0644)
+	os.WriteFile(filepath.Join(docDir, "generated.md"), []byte("# Generated"), 0644)
+
+	// .gitignore that ignores a specific file
+	os.WriteFile(filepath.Join(tmpDir, ".gitignore"), []byte("docs/generated.md\n"), 0644)
+
+	s := New(tmpDir, []string{"**/*.md"}, nil)
+	results, err := s.Scan()
+	if err != nil {
+		t.Fatalf("Scan() error = %v", err)
+	}
+
+	if len(results) != 1 {
+		t.Errorf("Scan() found %d files, want 1 (generated.md should be excluded): %v", len(results), results)
+	}
+	if len(results) == 1 && filepath.Base(results[0]) != "guide.md" {
+		t.Errorf("Scan() should return guide.md, got: %v", results)
+	}
+}
+
 func TestScan_BuildDirNoLongerBlocked(t *testing.T) {
 	tmpDir := t.TempDir()
 
