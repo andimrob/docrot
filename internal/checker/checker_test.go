@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -100,7 +101,7 @@ func TestRun_ParseError(t *testing.T) {
 	if r.Status != "stale" {
 		t.Errorf("Status = %q, want %q", r.Status, "stale")
 	}
-	if r.Reason == "" || len(r.Reason) < len("Failed to parse:") {
+	if !strings.Contains(r.Reason, "Failed to parse:") {
 		t.Errorf("Reason should contain 'Failed to parse:', got: %q", r.Reason)
 	}
 }
