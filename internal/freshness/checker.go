@@ -137,11 +137,11 @@ func (c *Checker) CheckWithIndex(doc *document.Document, index *git.FileChangeIn
 	result.LastReviewed = doc.Freshness.LastReviewed
 
 	switch doc.Freshness.Strategy {
-	case "interval":
+	case StrategyInterval:
 		return c.checkInterval(doc, result)
-	case "until_date":
+	case StrategyUntilDate:
 		return c.checkUntilDate(doc, result)
-	case "code_changes":
+	case StrategyCodeChanges:
 		return c.checkCodeChangesOnly(doc, result, index)
 	default:
 		result.Status = StatusStale

@@ -96,7 +96,7 @@ func findOldestCodeChangesDate(docs []parsedDoc) time.Time {
 		}
 
 		// Only consider docs using code_changes strategy
-		if pd.doc.Freshness.Strategy != "code_changes" {
+		if pd.doc.Freshness.Strategy != freshness.StrategyCodeChanges {
 			continue
 		}
 

@@ -8,6 +8,12 @@ const (
 	StatusMissingFrontmatter Status = "missing_frontmatter"
 )
 
+const (
+	StrategyInterval    = "interval"
+	StrategyUntilDate   = "until_date"
+	StrategyCodeChanges = "code_changes"
+)
+
 type Result struct {
 	Path         string   `json:"path"`
 	Status       Status   `json:"status"`

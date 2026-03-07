@@ -164,24 +164,23 @@ func (s *Scanner) shouldSkipDir(relPath string) bool {
 	return false
 }
 
-// matchesPattern checks if the file matches any of our search patterns.
+// matchesAny returns true if path matches any of the given patterns.
 // Pattern errors (malformed patterns) are treated as non-matches.
-func (s *Scanner) matchesPattern(relPath string) bool {
-	for _, pattern := range s.patterns {
-		if matched, err := doublestar.Match(pattern, relPath); err == nil && matched {
+func matchesAny(path string, patterns []string) bool {
+	for _, pattern := range patterns {
+		if matched, err := doublestar.Match(pattern, path); err == nil && matched {
 			return true
 		}
 	}
 	return false
 }
 
+// matchesPattern checks if the file matches any of our search patterns.
+func (s *Scanner) matchesPattern(relPath string) bool {
+	return matchesAny(relPath, s.patterns)
+}
+
 // isExcluded checks if a file path matches any exclude pattern.
-// Pattern errors (malformed patterns) are treated as non-matches.
 func (s *Scanner) isExcluded(relPath string) bool {
-	for _, pattern := range s.exclude {
-		if matched, err := doublestar.Match(pattern, relPath); err == nil && matched {
-			return true
-		}
-	}
-	return false
+	return matchesAny(relPath, s.exclude)
 }

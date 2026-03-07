@@ -10,6 +10,7 @@ import (
 	"github.com/andimrob/docrot/internal/document"
 	"github.com/andimrob/docrot/internal/files"
 	"github.com/andimrob/docrot/internal/freshness"
+	"github.com/andimrob/docrot/internal/git"
 	"github.com/spf13/cobra"
 )
 
@@ -107,23 +108,15 @@ func getFilesForDoc(docPath string) (filesOutput, error) {
 	}, nil
 }
 
-// findRoot tries to find the git repo root, falling back to the doc's grandparent directory
+// findRoot finds the git repo root for a document, falling back to the doc's parent directory.
 func findRoot(absDocPath string) string {
-	// Try to find git root by walking up
 	dir := filepath.Dir(absDocPath)
-	for {
-		if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
-			return dir
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			break
-		}
-		dir = parent
+	root, err := git.FindRepoRoot(dir)
+	if err != nil {
+		// Not in a git repo; fall back to parent of doc's directory
+		return filepath.Dir(dir)
 	}
-
-	// Fallback: use the directory containing the doc's parent (e.g., for subsystem/docs/readme.md, use subsystem's parent)
-	return filepath.Dir(filepath.Dir(absDocPath))
+	return root
 }
 
 func outputFilesJSON(outputs []filesOutput) error {

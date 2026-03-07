@@ -17,26 +17,23 @@ func ListFiles(root string, watchPatterns []string, ignorePatterns []string) ([]
 			return err
 		}
 
-		// Skip directories
-		if info.IsDir() {
-			return nil
-		}
-
-		// Get path relative to root
 		relPath, err := filepath.Rel(root, path)
 		if err != nil {
 			return err
 		}
-
-		// Normalize path separators for pattern matching
 		relPath = filepath.ToSlash(relPath)
 
-		// Check if file matches any watch pattern
-		if !matchesAny(relPath, watchPatterns) {
+		if info.IsDir() {
+			// Prune excluded directories early to avoid walking their contents
+			if relPath != "." && matchesAny(relPath, ignorePatterns) {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 
-		// Check if file matches any ignore pattern
+		if !matchesAny(relPath, watchPatterns) {
+			return nil
+		}
 		if matchesAny(relPath, ignorePatterns) {
 			return nil
 		}

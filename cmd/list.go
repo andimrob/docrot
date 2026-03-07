@@ -6,7 +6,6 @@ import (
 
 	"github.com/andimrob/docrot/internal/checker"
 	"github.com/andimrob/docrot/internal/config"
-	"github.com/andimrob/docrot/internal/freshness"
 	"github.com/andimrob/docrot/internal/git"
 	"github.com/andimrob/docrot/internal/output"
 	"github.com/andimrob/docrot/internal/scanner"
@@ -48,18 +47,9 @@ func runList(cmd *cobra.Command, args []string) error {
 
 	gitClient, _ := git.New(root)
 
-	// Convert config defaults to freshness defaults
-	var defaults *freshness.DefaultPatterns
-	if cfg.Defaults != nil && (len(cfg.Defaults.Watch) > 0 || len(cfg.Defaults.Ignore) > 0) {
-		defaults = &freshness.DefaultPatterns{
-			Watch:  cfg.Defaults.Watch,
-			Ignore: cfg.Defaults.Ignore,
-		}
-	}
-
 	// Check docs in parallel
 	numWorkers := getWorkers(cfg.Workers)
-	results := checker.Run(paths, gitClient, numWorkers, defaults)
+	results := checker.Run(paths, gitClient, numWorkers, defaultsFromConfig(cfg))
 
 	var formatter output.Formatter
 	switch format {

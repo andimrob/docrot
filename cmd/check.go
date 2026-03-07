@@ -95,18 +95,9 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		gitClient, _ = git.New(repoRoot)
 	}
 
-	// Convert config defaults to freshness defaults
-	var defaults *freshness.DefaultPatterns
-	if cfg.Defaults != nil && (len(cfg.Defaults.Watch) > 0 || len(cfg.Defaults.Ignore) > 0) {
-		defaults = &freshness.DefaultPatterns{
-			Watch:  cfg.Defaults.Watch,
-			Ignore: cfg.Defaults.Ignore,
-		}
-	}
-
 	// Check docs in parallel
 	numWorkers := getWorkers(cfg.Workers)
-	rawResults := checker.Run(paths, gitClient, numWorkers, defaults)
+	rawResults := checker.Run(paths, gitClient, numWorkers, defaultsFromConfig(cfg))
 
 	// Post-process results based on config
 	var results []freshness.Result

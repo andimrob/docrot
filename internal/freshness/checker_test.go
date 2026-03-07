@@ -356,11 +356,11 @@ func TestCheckWithIndex_IntervalStrategy_StillWorks(t *testing.T) {
 
 func TestComputeDefaultPatterns(t *testing.T) {
 	tests := []struct {
-		name        string
-		docPath     string
-		repoRoot    string
-		wantWatch   string
-		wantIgnore  string
+		name       string
+		docPath    string
+		repoRoot   string
+		wantWatch  string
+		wantIgnore string // empty string means expect no ignore patterns
 	}{
 		{
 			name:       "doc in subsystem/docs",
@@ -377,6 +377,13 @@ func TestComputeDefaultPatterns(t *testing.T) {
 			wantIgnore: "subsystem/doc/**",
 		},
 		{
+			name:       "doc in subsystem/documentation",
+			docPath:    "/repo/subsystem/documentation/readme.md",
+			repoRoot:   "/repo",
+			wantWatch:  "subsystem/**/*",
+			wantIgnore: "subsystem/documentation/**",
+		},
+		{
 			name:       "doc in nested docs dir",
 			docPath:    "/repo/subsystem/docs/guides/setup.md",
 			repoRoot:   "/repo",
@@ -390,6 +397,20 @@ func TestComputeDefaultPatterns(t *testing.T) {
 			wantWatch:  "**/*",
 			wantIgnore: "docs/**",
 		},
+		{
+			name:       "doc directly in subsystem (no docs subdir)",
+			docPath:    "/repo/subsystem/readme.md",
+			repoRoot:   "/repo",
+			wantWatch:  "subsystem/**/*",
+			wantIgnore: "",
+		},
+		{
+			name:       "doc at repo root (no docs dir)",
+			docPath:    "/repo/readme.md",
+			repoRoot:   "/repo",
+			wantWatch:  "**/*",
+			wantIgnore: "",
+		},
 	}
 
 	for _, tt := range tests {
@@ -399,8 +420,14 @@ func TestComputeDefaultPatterns(t *testing.T) {
 			if len(watch) != 1 || watch[0] != tt.wantWatch {
 				t.Errorf("watch = %v, want [%s]", watch, tt.wantWatch)
 			}
-			if len(ignore) != 1 || ignore[0] != tt.wantIgnore {
-				t.Errorf("ignore = %v, want [%s]", ignore, tt.wantIgnore)
+			if tt.wantIgnore == "" {
+				if len(ignore) != 0 {
+					t.Errorf("ignore = %v, want []", ignore)
+				}
+			} else {
+				if len(ignore) != 1 || ignore[0] != tt.wantIgnore {
+					t.Errorf("ignore = %v, want [%s]", ignore, tt.wantIgnore)
+				}
 			}
 		})
 	}
@@ -727,6 +754,159 @@ func TestCheck_ConfigDefaults_NilDefaultsStillWorks(t *testing.T) {
 	if result.Status != StatusStale {
 		t.Errorf("Status = %v, want %v (smart defaults should work with nil config defaults)", result.Status, StatusStale)
 	}
+}
+
+// Tests for error paths (invalid dates, intervals, unknown strategies)
+
+func TestCheck_InvalidLastReviewedDate(t *testing.T) {
+	doc := &document.Document{
+		Path: "doc/readme.md",
+		Freshness: &document.Freshness{
+			LastReviewed: "not-a-date",
+			Strategy:     StrategyInterval,
+			Interval:     "90d",
+		},
+	}
+
+	checker := NewChecker(nil, "", nil)
+	result := checker.Check(doc)
+
+	if result.Status != StatusStale {
+		t.Errorf("Status = %v, want %v for invalid date", result.Status, StatusStale)
+	}
+	if result.Reason == "" {
+		t.Error("Expected reason to be set for invalid date")
+	}
+}
+
+func TestCheck_InvalidInterval(t *testing.T) {
+	doc := &document.Document{
+		Path: "doc/readme.md",
+		Freshness: &document.Freshness{
+			LastReviewed: time.Now().Format("2006-01-02"),
+			Strategy:     StrategyInterval,
+			Interval:     "90x", // invalid unit
+		},
+	}
+
+	checker := NewChecker(nil, "", nil)
+	result := checker.Check(doc)
+
+	if result.Status != StatusStale {
+		t.Errorf("Status = %v, want %v for invalid interval", result.Status, StatusStale)
+	}
+	if result.Reason == "" {
+		t.Error("Expected reason to be set for invalid interval")
+	}
+}
+
+func TestCheck_InvalidExpiresDate(t *testing.T) {
+	doc := &document.Document{
+		Path: "doc/readme.md",
+		Freshness: &document.Freshness{
+			LastReviewed: "2024-01-01",
+			Strategy:     StrategyUntilDate,
+			Expires:      "not-a-date",
+		},
+	}
+
+	checker := NewChecker(nil, "", nil)
+	result := checker.Check(doc)
+
+	if result.Status != StatusStale {
+		t.Errorf("Status = %v, want %v for invalid expires date", result.Status, StatusStale)
+	}
+	if result.Reason == "" {
+		t.Error("Expected reason to be set for invalid expires date")
+	}
+}
+
+func TestCheck_UnknownStrategy(t *testing.T) {
+	doc := &document.Document{
+		Path: "doc/readme.md",
+		Freshness: &document.Freshness{
+			LastReviewed: "2024-01-01",
+			Strategy:     "bogus",
+		},
+	}
+
+	checker := NewChecker(nil, "", nil)
+	result := checker.Check(doc)
+
+	if result.Status != StatusStale {
+		t.Errorf("Status = %v, want %v for unknown strategy", result.Status, StatusStale)
+	}
+	if !contains(result.Reason, "bogus") {
+		t.Errorf("Reason should mention unknown strategy name, got: %s", result.Reason)
+	}
+}
+
+func TestCheck_CodeChanges_InvalidLastReviewedDate(t *testing.T) {
+	doc := &document.Document{
+		Path: "doc/readme.md",
+		Freshness: &document.Freshness{
+			LastReviewed: "not-a-date",
+			Strategy:     StrategyCodeChanges,
+			Watch:        []string{"**/*.go"},
+		},
+	}
+
+	checker := NewChecker(nil, "", nil)
+	result := checker.Check(doc)
+
+	if result.Status != StatusStale {
+		t.Errorf("Status = %v, want %v for invalid date in code_changes", result.Status, StatusStale)
+	}
+	if result.Reason == "" {
+		t.Error("Expected reason to be set for invalid date")
+	}
+}
+
+func TestCheck_CodeChanges_ChangedFilesPopulated(t *testing.T) {
+	tmpDir := setupGitRepo(t)
+
+	gitCommit(t, tmpDir, "doc/readme.md", "# Readme", "Add docs")
+	gitCommit(t, tmpDir, "src/main.go", "package main", "Add main")
+	gitCommit(t, tmpDir, "src/lib.go", "package lib", "Add lib")
+
+	gitClient, err := git.New(tmpDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	doc := &document.Document{
+		Path: filepath.Join(tmpDir, "doc/readme.md"),
+		Freshness: &document.Freshness{
+			LastReviewed: time.Now().AddDate(0, 0, -1).Format("2006-01-02"),
+			Strategy:     StrategyCodeChanges,
+			Watch:        []string{"src/**/*.go"},
+		},
+	}
+
+	checker := NewChecker(gitClient, tmpDir, nil)
+	result := checker.Check(doc)
+
+	if result.Status != StatusStale {
+		t.Fatalf("Status = %v, want %v", result.Status, StatusStale)
+	}
+	if len(result.ChangedFiles) != 2 {
+		t.Errorf("ChangedFiles = %v, want 2 entries", result.ChangedFiles)
+	}
+	if !containsStr(result.ChangedFiles, "src/main.go") {
+		t.Errorf("ChangedFiles should contain src/main.go, got: %v", result.ChangedFiles)
+	}
+	if !containsStr(result.ChangedFiles, "src/lib.go") {
+		t.Errorf("ChangedFiles should contain src/lib.go, got: %v", result.ChangedFiles)
+	}
+}
+
+func containsStr(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
 }
 
 func contains(s, substr string) bool {

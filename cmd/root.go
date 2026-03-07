@@ -3,6 +3,8 @@ package cmd
 import (
 	"os"
 
+	"github.com/andimrob/docrot/internal/config"
+	"github.com/andimrob/docrot/internal/freshness"
 	"github.com/spf13/cobra"
 )
 
@@ -43,4 +45,15 @@ func getWorkers(configWorkers int) int {
 		return workers
 	}
 	return configWorkers
+}
+
+// defaultsFromConfig extracts watch/ignore defaults from config into a freshness.DefaultPatterns.
+func defaultsFromConfig(cfg *config.Config) *freshness.DefaultPatterns {
+	if cfg.Defaults != nil && (len(cfg.Defaults.Watch) > 0 || len(cfg.Defaults.Ignore) > 0) {
+		return &freshness.DefaultPatterns{
+			Watch:  cfg.Defaults.Watch,
+			Ignore: cfg.Defaults.Ignore,
+		}
+	}
+	return nil
 }

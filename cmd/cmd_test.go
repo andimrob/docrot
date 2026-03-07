@@ -387,8 +387,8 @@ docrot:
 func TestFilesCommand_WithExplicitPatterns(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Create a fake .git directory so root detection works
-	os.MkdirAll(filepath.Join(tmpDir, ".git"), 0755)
+	// Initialize a real git repo so root detection works
+	exec.Command("git", "-C", tmpDir, "init").Run()
 
 	// Create directory structure
 	os.MkdirAll(filepath.Join(tmpDir, "subsystem/src"), 0755)
@@ -628,8 +628,8 @@ docrot:
 func TestFilesCommand_JSONFormat(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Create a fake .git directory so root detection works
-	os.MkdirAll(filepath.Join(tmpDir, ".git"), 0755)
+	// Initialize a real git repo so root detection works
+	exec.Command("git", "-C", tmpDir, "init").Run()
 
 	os.MkdirAll(filepath.Join(tmpDir, "src"), 0755)
 	os.MkdirAll(filepath.Join(tmpDir, "docs"), 0755)
@@ -915,5 +915,109 @@ func gitCommit(t *testing.T, dir, message string) {
 	cmd.Dir = dir
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git commit failed: %v\n%s", err, out)
+	}
+}
+
+func TestFilesCommand_SmartDefaults(t *testing.T) {
+	tmpDir := t.TempDir()
+	initGitRepo(t, tmpDir)
+
+	// Create structure: subsystem/docs/readme.md and subsystem/src/main.go
+	os.MkdirAll(filepath.Join(tmpDir, "subsystem/src"), 0755)
+	os.MkdirAll(filepath.Join(tmpDir, "subsystem/docs"), 0755)
+	os.WriteFile(filepath.Join(tmpDir, "subsystem/src/main.go"), []byte("package main"), 0644)
+
+	// Doc with no watch/ignore — should use smart defaults
+	doc := `---
+docrot:
+  last_reviewed: "2024-01-01"
+  strategy: interval
+  interval: 90d
+---
+# Doc
+`
+	docPath := filepath.Join(tmpDir, "subsystem/docs/readme.md")
+	os.WriteFile(docPath, []byte(doc), 0644)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	format = "text"
+	err := runFiles(nil, []string{docPath})
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	output := buf.String()
+
+	if err != nil {
+		t.Errorf("runFiles() error = %v", err)
+	}
+
+	// Smart defaults: watch subsystem/**/* , ignore subsystem/docs/**
+	// src/main.go should be included, readme.md should not
+	if !strings.Contains(output, "main.go") {
+		t.Errorf("Output should contain main.go (watched by smart defaults), got: %s", output)
+	}
+	if strings.Contains(output, "readme.md") {
+		t.Errorf("Output should NOT contain readme.md (ignored by smart defaults), got: %s", output)
+	}
+}
+
+func TestCheckCommand_QuietFlag(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	freshDoc := `---
+docrot:
+  last_reviewed: "2026-01-20"
+  strategy: interval
+  interval: 90d
+---
+# Fresh Doc
+`
+	staleDoc := `---
+docrot:
+  last_reviewed: "2020-01-01"
+  strategy: interval
+  interval: 30d
+---
+# Stale Doc
+`
+	freshPath := filepath.Join(tmpDir, "fresh.md")
+	stalePath := filepath.Join(tmpDir, "stale.md")
+	os.WriteFile(freshPath, []byte(freshDoc), 0644)
+	os.WriteFile(stalePath, []byte(staleDoc), 0644)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	configPath = ""
+	format = "text"
+	quiet = true
+
+	err := runCheck(nil, []string{freshPath, stalePath})
+
+	w.Close()
+	os.Stdout = oldStdout
+	quiet = false // reset global
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	output := buf.String()
+
+	if err != ErrStaleDocsFound {
+		t.Errorf("runCheck() error = %v, want ErrStaleDocsFound", err)
+	}
+
+	// Quiet mode: stale doc should appear, fresh doc should not
+	if !strings.Contains(output, "stale.md") {
+		t.Errorf("Quiet output should contain stale.md, got: %s", output)
+	}
+	if strings.Contains(output, "fresh.md") {
+		t.Errorf("Quiet output should NOT contain fresh.md, got: %s", output)
 	}
 }

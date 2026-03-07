@@ -101,6 +101,44 @@ func TestListFiles_MultipleWatchPatterns(t *testing.T) {
 	}
 }
 
+func TestListFiles_ExcludedDirectoryIsPruned(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a deeply nested file inside an excluded directory
+	os.MkdirAll(filepath.Join(tmpDir, "ignored_dir/nested/deep"), 0755)
+	os.MkdirAll(filepath.Join(tmpDir, "src"), 0755)
+	os.WriteFile(filepath.Join(tmpDir, "ignored_dir/nested/deep/file.go"), []byte("package x"), 0644)
+	os.WriteFile(filepath.Join(tmpDir, "src/main.go"), []byte("package main"), 0644)
+
+	files, err := ListFiles(tmpDir, []string{"**/*"}, []string{"ignored_dir/**"})
+	if err != nil {
+		t.Fatalf("ListFiles() error = %v", err)
+	}
+
+	if !contains(files, "src/main.go") {
+		t.Errorf("Expected src/main.go in results: %v", files)
+	}
+	if contains(files, "ignored_dir/nested/deep/file.go") {
+		t.Errorf("ignored_dir/nested/deep/file.go should be excluded: %v", files)
+	}
+}
+
+func TestListFiles_EmptyWatchPatterns(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	os.MkdirAll(filepath.Join(tmpDir, "src"), 0755)
+	os.WriteFile(filepath.Join(tmpDir, "src/main.go"), []byte("package main"), 0644)
+
+	files, err := ListFiles(tmpDir, []string{}, nil)
+	if err != nil {
+		t.Fatalf("ListFiles() error = %v", err)
+	}
+
+	if len(files) != 0 {
+		t.Errorf("Expected 0 files with empty watch patterns, got %d: %v", len(files), files)
+	}
+}
+
 func contains(slice []string, item string) bool {
 	for _, s := range slice {
 		if s == item {
