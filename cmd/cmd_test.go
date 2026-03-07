@@ -62,7 +62,7 @@ func TestCheckCommand_WithFreshDoc(t *testing.T) {
 	// Create a fresh doc (using current date)
 	freshDoc := `---
 docrot:
-  last_reviewed: "2026-01-20"
+  last_reviewed: "2099-01-20"
   strategy: interval
   interval: 90d
 ---
@@ -103,7 +103,7 @@ func TestCheckCommand_JSONFormat(t *testing.T) {
 
 	doc := `---
 docrot:
-  last_reviewed: "2026-01-20"
+  last_reviewed: "2099-01-20"
   strategy: interval
   interval: 90d
 ---
@@ -262,7 +262,7 @@ func TestCheckCommand_PatternFlag(t *testing.T) {
 
 	doc := `---
 docrot:
-  last_reviewed: "2026-01-20"
+  last_reviewed: "2099-01-20"
   strategy: interval
   interval: 90d
 ---
@@ -516,7 +516,7 @@ func TestCheckCommand_MixedFilesAndDirs(t *testing.T) {
 
 	dirDoc := `---
 docrot:
-  last_reviewed: "2026-01-20"
+  last_reviewed: "2099-01-20"
   strategy: interval
   interval: 90d
 ---
@@ -527,7 +527,7 @@ docrot:
 	// Create a standalone file
 	standaloneDoc := `---
 docrot:
-  last_reviewed: "2026-01-20"
+  last_reviewed: "2099-01-20"
   strategy: interval
   interval: 90d
 ---
@@ -573,7 +573,7 @@ func TestCheckCommand_MultipleFiles(t *testing.T) {
 	// Create two doc files
 	freshDoc := `---
 docrot:
-  last_reviewed: "2026-01-20"
+  last_reviewed: "2099-01-20"
   strategy: interval
   interval: 90d
 ---
@@ -630,7 +630,7 @@ func TestCheckCommand_SingleFile(t *testing.T) {
 	// Create a doc file (not in a doc/ subdirectory)
 	doc := `---
 docrot:
-  last_reviewed: "2026-01-20"
+  last_reviewed: "2099-01-20"
   strategy: interval
   interval: 90d
 ---
@@ -739,7 +739,7 @@ func TestCheckCommand_PathsInDifferentRepos_ReturnsError(t *testing.T) {
 
 	doc := `---
 docrot:
-  last_reviewed: "2026-01-20"
+  last_reviewed: "2099-01-20"
   strategy: interval
   interval: 90d
 ---
@@ -778,7 +778,7 @@ func TestCheckCommand_PathsInSameRepo_Succeeds(t *testing.T) {
 
 	doc := `---
 docrot:
-  last_reviewed: "2026-01-20"
+  last_reviewed: "2099-01-20"
   strategy: interval
   interval: 90d
 ---
@@ -835,7 +835,7 @@ func TestCheckCommand_DirectoryInDifferentRepo_ReturnsError(t *testing.T) {
 
 	doc := `---
 docrot:
-  last_reviewed: "2026-01-20"
+  last_reviewed: "2099-01-20"
   strategy: interval
   interval: 90d
 ---
@@ -1017,7 +1017,7 @@ func TestCheckCommand_QuietFlag(t *testing.T) {
 
 	freshDoc := `---
 docrot:
-  last_reviewed: "2026-01-20"
+  last_reviewed: "2099-01-20"
   strategy: interval
   interval: 90d
 ---
