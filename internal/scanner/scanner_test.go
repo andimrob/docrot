@@ -2,6 +2,7 @@ package scanner
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 )
@@ -176,6 +177,49 @@ func TestScan_WildcardPattern(t *testing.T) {
 
 	if len(results) != 3 {
 		t.Errorf("Scan() found %d files, want 3", len(results))
+	}
+}
+
+func TestScan_RespectsGitIgnore(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Init a git repo
+	for _, args := range [][]string{
+		{"git", "init"},
+		{"git", "config", "user.email", "test@test.com"},
+		{"git", "config", "user.name", "Test"},
+		{"git", "config", "commit.gpgsign", "false"},
+	} {
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = tmpDir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git command %v failed: %v\n%s", args, err, out)
+		}
+	}
+
+	// Create two doc dirs: one gitignored, one not
+	normalDir := filepath.Join(tmpDir, "docs")
+	generatedDir := filepath.Join(tmpDir, "generated", "docs")
+	os.MkdirAll(normalDir, 0755)
+	os.MkdirAll(generatedDir, 0755)
+
+	os.WriteFile(filepath.Join(normalDir, "guide.md"), []byte("# Guide"), 0644)
+	os.WriteFile(filepath.Join(generatedDir, "api.md"), []byte("# API"), 0644)
+
+	// .gitignore that ignores the generated/ directory
+	os.WriteFile(filepath.Join(tmpDir, ".gitignore"), []byte("generated/\n"), 0644)
+
+	s := New(tmpDir, []string{"**/*.md"}, nil)
+	results, err := s.Scan()
+	if err != nil {
+		t.Fatalf("Scan() error = %v", err)
+	}
+
+	if len(results) != 1 {
+		t.Errorf("Scan() found %d files, want 1 (generated/ should be excluded by .gitignore): %v", len(results), results)
+	}
+	if len(results) == 1 && !filepath.IsAbs(results[0]) || (len(results) == 1 && filepath.Base(results[0]) != "guide.md") {
+		t.Errorf("Scan() should return guide.md, got: %v", results)
 	}
 }
 
