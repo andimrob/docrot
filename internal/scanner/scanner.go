@@ -3,6 +3,7 @@ package scanner
 import (
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -80,7 +81,63 @@ func (s *Scanner) Scan() ([]string, error) {
 		return nil, err
 	}
 
+	results = filterGitIgnored(s.root, results)
+
 	return results, nil
+}
+
+// filterGitIgnored removes any paths that are gitignored, using git check-ignore.
+// If the root is not a git repository or git is unavailable, all paths are returned unchanged.
+func filterGitIgnored(root string, paths []string) []string {
+	if len(paths) == 0 {
+		return paths
+	}
+
+	// Verify root is inside a git repo
+	checkRepo := exec.Command("git", "rev-parse", "--git-dir")
+	checkRepo.Dir = root
+	if err := checkRepo.Run(); err != nil {
+		return paths
+	}
+
+	// Build newline-separated list of relative paths for git check-ignore
+	var sb strings.Builder
+	relPaths := make([]string, len(paths))
+	for i, p := range paths {
+		rel, err := filepath.Rel(root, p)
+		if err != nil {
+			rel = p
+		}
+		relPaths[i] = rel
+		sb.WriteString(rel)
+		sb.WriteByte('\n')
+	}
+
+	cmd := exec.Command("git", "check-ignore", "--stdin")
+	cmd.Dir = root
+	cmd.Stdin = strings.NewReader(sb.String())
+	out, err := cmd.Output()
+
+	// Exit code 1 means nothing was ignored — that's fine, not an error
+	if err != nil {
+		return paths
+	}
+
+	// Build set of ignored relative paths
+	ignored := make(map[string]bool)
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line != "" {
+			ignored[filepath.Clean(line)] = true
+		}
+	}
+
+	filtered := make([]string, 0, len(paths))
+	for i, p := range paths {
+		if !ignored[filepath.Clean(relPaths[i])] {
+			filtered = append(filtered, p)
+		}
+	}
+	return filtered
 }
 
 // extractTargetDirs extracts directory names we're looking for from patterns
