@@ -138,11 +138,6 @@ func (s *Scanner) shouldSkipDir(relPath string) bool {
 		".svn":         true,
 		"__pycache__":  true,
 		".cache":       true,
-		"dist":         true,
-		"build":        true,
-		"tmp":          true,
-		"log":          true,
-		"logs":         true,
 	}
 
 	if skipDirs[dirName] {
