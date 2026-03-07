@@ -18,10 +18,14 @@ import (
 // ErrStaleDocsFound is returned when stale docs are found
 var ErrStaleDocsFound = errors.New("stale documentation found")
 
+// ErrMissingFrontmatterFound is returned when docs missing frontmatter are found in strict mode
+var ErrMissingFrontmatterFound = errors.New("documentation missing frontmatter")
+
 // ErrMultipleRepos is returned when paths span multiple git repositories
 var ErrMultipleRepos = errors.New("paths are in different git repositories")
 
 var quiet bool
+var strictMode bool
 
 var checkCmd = &cobra.Command{
 	Use:           "check [paths...]",
@@ -34,6 +38,7 @@ var checkCmd = &cobra.Command{
 
 func init() {
 	checkCmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "Only output stale docs")
+	checkCmd.Flags().BoolVar(&strictMode, "strict", false, "Exit with error if any docs are missing frontmatter")
 	rootCmd.AddCommand(checkCmd)
 }
 
@@ -41,6 +46,11 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	cfg, err := config.Load(configPath)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	effectivePolicy := cfg.OnMissingFrontmatter
+	if strictMode {
+		effectivePolicy = "strict"
 	}
 
 	var paths []string
@@ -56,7 +66,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 			}
 			if info.IsDir() {
 				// Scan directory for docs
-				s := scanner.New(arg, cfg.Patterns, cfg.Exclude)
+				s := scanner.New(arg, getPatterns(cfg.Patterns), cfg.Exclude)
 				dirPaths, err := s.Scan()
 				if err != nil {
 					return fmt.Errorf("failed to scan for docs: %w", err)
@@ -70,7 +80,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	} else {
 		inputPaths = []string{"."}
 		// Default: scan current directory
-		s := scanner.New(".", cfg.Patterns, cfg.Exclude)
+		s := scanner.New(".", getPatterns(cfg.Patterns), cfg.Exclude)
 		var err error
 		paths, err = s.Scan()
 		if err != nil {
@@ -103,11 +113,12 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	var results []freshness.Result
 	for _, result := range rawResults {
 		if result.Status == freshness.StatusMissingFrontmatter {
-			switch cfg.OnMissingFrontmatter {
+			switch effectivePolicy {
 			case "skip":
 				continue
 			case "fail":
 				result.Status = freshness.StatusStale
+			// "strict": result included unchanged with StatusMissingFrontmatter
 			}
 		}
 		results = append(results, result)
@@ -128,6 +139,19 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	for _, r := range results {
 		if r.Status == freshness.StatusStale {
 			return ErrStaleDocsFound
+		}
+	}
+
+	if effectivePolicy == "strict" {
+		var missingCount int
+		for _, r := range results {
+			if r.Status == freshness.StatusMissingFrontmatter {
+				missingCount++
+			}
+		}
+		if missingCount > 0 {
+			fmt.Fprintf(os.Stderr, "Error: %d file(s) missing frontmatter (strict mode)\n", missingCount)
+			return ErrMissingFrontmatterFound
 		}
 	}
 

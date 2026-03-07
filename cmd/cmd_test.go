@@ -253,6 +253,51 @@ func TestInitCommand_DoesNotOverwriteExisting(t *testing.T) {
 	}
 }
 
+func TestCheckCommand_PatternFlag(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a doc in a non-standard directory (not "doc" or "docs")
+	rfcsDir := filepath.Join(tmpDir, "rfcs")
+	os.MkdirAll(rfcsDir, 0755)
+
+	doc := `---
+docrot:
+  last_reviewed: "2026-01-20"
+  strategy: interval
+  interval: 90d
+---
+# RFC 001
+`
+	os.WriteFile(filepath.Join(rfcsDir, "rfc-001.md"), []byte(doc), 0644)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	configPath = ""
+	format = "text"
+	quiet = false
+	patternFlag = []string{"**/*.md"} // Override config patterns via flag
+
+	err := runCheck(nil, []string{tmpDir})
+
+	w.Close()
+	os.Stdout = oldStdout
+	patternFlag = nil // reset global
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	output := buf.String()
+
+	if err != nil {
+		t.Errorf("runCheck() error = %v", err)
+	}
+
+	if !strings.Contains(output, "rfc-001.md") {
+		t.Errorf("Output should contain rfc-001.md when using --pattern flag, got: %s", output)
+	}
+}
+
 func TestGetWorkers_FlagOverridesConfig(t *testing.T) {
 	// When flag is set, it should override config
 	workers = 4 // CLI flag

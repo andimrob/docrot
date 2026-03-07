@@ -44,7 +44,7 @@ func runAddFrontmatter(cmd *cobra.Command, args []string) error {
 		root = args[0]
 	}
 
-	s := scanner.New(root, cfg.Patterns, cfg.Exclude)
+	s := scanner.New(root, getPatterns(cfg.Patterns), cfg.Exclude)
 	paths, err := s.Scan()
 	if err != nil {
 		return fmt.Errorf("failed to scan for docs: %w", err)
