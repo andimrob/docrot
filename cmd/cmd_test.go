@@ -1248,10 +1248,6 @@ Some content.
 	os.WriteFile(filepath.Join(docDir, "stale.md"), []byte(staleDoc), 0644)
 	os.WriteFile(filepath.Join(docDir, "missing.md"), []byte(missingDoc), 0644)
 
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-
 	configPath = ""
 	format = "text"
 	quiet = false
@@ -1259,12 +1255,7 @@ Some content.
 
 	err := runCheck(nil, []string{tmpDir})
 
-	w.Close()
-	os.Stdout = oldStdout
 	strictMode = false // reset
-
-	var buf bytes.Buffer
-	buf.ReadFrom(r)
 
 	// Stale error takes priority over missing frontmatter error
 	if err != ErrStaleDocsFound {
@@ -1288,10 +1279,6 @@ Some content.
 	cfgPath := filepath.Join(tmpDir, ".docrot.yml")
 	os.WriteFile(cfgPath, []byte(cfgContent), 0644)
 
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-
 	configPath = cfgPath
 	format = "text"
 	quiet = false
@@ -1299,12 +1286,7 @@ Some content.
 
 	err := runCheck(nil, []string{tmpDir})
 
-	w.Close()
-	os.Stdout = oldStdout
 	configPath = "" // reset
-
-	var buf bytes.Buffer
-	buf.ReadFrom(r)
 
 	if err != ErrMissingFrontmatterFound {
 		t.Errorf("runCheck() error = %v, want ErrMissingFrontmatterFound", err)

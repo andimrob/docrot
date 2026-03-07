@@ -90,8 +90,10 @@ func Load(path string) (*Config, error) {
 		}
 	}
 
-	valid := map[string]bool{"warn": true, "skip": true, "fail": true, "strict": true, "": true}
-	if !valid[cfg.OnMissingFrontmatter] {
+	switch cfg.OnMissingFrontmatter {
+	case "", "warn", "skip", "fail", "strict":
+		// valid
+	default:
 		return nil, fmt.Errorf("invalid on_missing_frontmatter value %q: must be warn, skip, fail, or strict", cfg.OnMissingFrontmatter)
 	}
 
