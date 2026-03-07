@@ -111,6 +111,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 
 	// Post-process results based on config
 	var results []freshness.Result
+	var missingCount int
 	for _, result := range rawResults {
 		if result.Status == freshness.StatusMissingFrontmatter {
 			switch effectivePolicy {
@@ -118,7 +119,9 @@ func runCheck(cmd *cobra.Command, args []string) error {
 				continue
 			case "fail":
 				result.Status = freshness.StatusStale
-			// "strict": result included unchanged with StatusMissingFrontmatter
+			default:
+				// "strict" and "warn": pass through with StatusMissingFrontmatter
+				missingCount++
 			}
 		}
 		results = append(results, result)
@@ -142,17 +145,9 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	if effectivePolicy == "strict" {
-		var missingCount int
-		for _, r := range results {
-			if r.Status == freshness.StatusMissingFrontmatter {
-				missingCount++
-			}
-		}
-		if missingCount > 0 {
-			fmt.Fprintf(os.Stderr, "Error: %d file(s) missing frontmatter (strict mode)\n", missingCount)
-			return ErrMissingFrontmatterFound
-		}
+	if effectivePolicy == "strict" && missingCount > 0 {
+		fmt.Fprintf(os.Stderr, "Error: %d file(s) missing frontmatter (strict mode)\n", missingCount)
+		return ErrMissingFrontmatterFound
 	}
 
 	return nil

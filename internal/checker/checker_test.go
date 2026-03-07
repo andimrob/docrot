@@ -108,37 +108,14 @@ func TestRun_ParseError(t *testing.T) {
 
 func TestRun_WithGitClient_BuildsIndex(t *testing.T) {
 	tmpDir := t.TempDir()
-
-	// Init git repo
-	cmds := [][]string{
-		{"git", "init"},
-		{"git", "config", "user.email", "test@test.com"},
-		{"git", "config", "user.name", "Test"},
-		{"git", "config", "commit.gpgsign", "false"},
-	}
-	for _, args := range cmds {
-		cmd := exec.Command(args[0], args[1:]...)
-		cmd.Dir = tmpDir
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git command %v failed: %v\n%s", args, err, out)
-		}
-	}
+	initGitRepo(t, tmpDir)
 
 	// Create and commit src/main.go
 	srcDir := filepath.Join(tmpDir, "src")
 	os.MkdirAll(srcDir, 0755)
 	os.WriteFile(filepath.Join(srcDir, "main.go"), []byte("package main"), 0644)
-
-	addCmd := exec.Command("git", "add", "src/main.go")
-	addCmd.Dir = tmpDir
-	if out, err := addCmd.CombinedOutput(); err != nil {
-		t.Fatalf("git add failed: %v\n%s", err, out)
-	}
-	commitCmd := exec.Command("git", "commit", "-m", "Add source")
-	commitCmd.Dir = tmpDir
-	if out, err := commitCmd.CombinedOutput(); err != nil {
-		t.Fatalf("git commit failed: %v\n%s", err, out)
-	}
+	gitAdd(t, tmpDir, "src/main.go")
+	gitCommit(t, tmpDir, "Add source")
 
 	// Create a code_changes strategy doc with a past last_reviewed date
 	docDir := filepath.Join(tmpDir, "doc")
@@ -172,5 +149,40 @@ docrot:
 	}
 	if len(r.ChangedFiles) == 0 {
 		t.Errorf("ChangedFiles should be populated, got empty")
+	}
+}
+
+func initGitRepo(t *testing.T, dir string) {
+	t.Helper()
+	cmds := [][]string{
+		{"git", "init"},
+		{"git", "config", "user.email", "test@test.com"},
+		{"git", "config", "user.name", "Test"},
+		{"git", "config", "commit.gpgsign", "false"},
+	}
+	for _, args := range cmds {
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git command %v failed: %v\n%s", args, err, out)
+		}
+	}
+}
+
+func gitAdd(t *testing.T, dir, file string) {
+	t.Helper()
+	cmd := exec.Command("git", "add", file)
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git add failed: %v\n%s", err, out)
+	}
+}
+
+func gitCommit(t *testing.T, dir, message string) {
+	t.Helper()
+	cmd := exec.Command("git", "commit", "-m", message)
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git commit failed: %v\n%s", err, out)
 	}
 }
