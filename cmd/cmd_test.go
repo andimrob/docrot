@@ -1151,6 +1151,166 @@ docrot:
 	}
 }
 
+func TestCheckCommand_StrictMode_MissingFrontmatter(t *testing.T) {
+	tmpDir := t.TempDir()
+	docDir := filepath.Join(tmpDir, "doc")
+	os.MkdirAll(docDir, 0755)
+
+	// Create doc without frontmatter
+	doc := `# No Frontmatter
+Some content.
+`
+	os.WriteFile(filepath.Join(docDir, "missing.md"), []byte(doc), 0644)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	configPath = ""
+	format = "text"
+	quiet = false
+	strictMode = true
+
+	err := runCheck(nil, []string{tmpDir})
+
+	w.Close()
+	os.Stdout = oldStdout
+	strictMode = false // reset
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	output := buf.String()
+
+	if err != ErrMissingFrontmatterFound {
+		t.Errorf("runCheck() error = %v, want ErrMissingFrontmatterFound", err)
+	}
+
+	// Doc should appear in output (not skipped)
+	if !strings.Contains(output, "missing.md") {
+		t.Errorf("Output should contain missing.md, got: %s", output)
+	}
+}
+
+func TestCheckCommand_StrictMode_AllFresh_Succeeds(t *testing.T) {
+	tmpDir := t.TempDir()
+	docDir := filepath.Join(tmpDir, "doc")
+	os.MkdirAll(docDir, 0755)
+
+	freshDoc := fmt.Sprintf(`---
+docrot:
+  last_reviewed: "%s"
+  strategy: interval
+  interval: 90d
+---
+# Fresh Doc
+`, recentDate())
+	os.WriteFile(filepath.Join(docDir, "fresh.md"), []byte(freshDoc), 0644)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	configPath = ""
+	format = "text"
+	quiet = false
+	strictMode = true
+
+	err := runCheck(nil, []string{tmpDir})
+
+	w.Close()
+	os.Stdout = oldStdout
+	strictMode = false // reset
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+
+	if err != nil {
+		t.Errorf("runCheck() error = %v, want nil", err)
+	}
+}
+
+func TestCheckCommand_StrictMode_StaleAndMissing_ReturnsStaleError(t *testing.T) {
+	tmpDir := t.TempDir()
+	docDir := filepath.Join(tmpDir, "doc")
+	os.MkdirAll(docDir, 0755)
+
+	staleDoc := `---
+docrot:
+  last_reviewed: "2020-01-01"
+  strategy: interval
+  interval: 30d
+---
+# Stale Doc
+`
+	missingDoc := `# No Frontmatter
+Some content.
+`
+	os.WriteFile(filepath.Join(docDir, "stale.md"), []byte(staleDoc), 0644)
+	os.WriteFile(filepath.Join(docDir, "missing.md"), []byte(missingDoc), 0644)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	configPath = ""
+	format = "text"
+	quiet = false
+	strictMode = true
+
+	err := runCheck(nil, []string{tmpDir})
+
+	w.Close()
+	os.Stdout = oldStdout
+	strictMode = false // reset
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+
+	// Stale error takes priority over missing frontmatter error
+	if err != ErrStaleDocsFound {
+		t.Errorf("runCheck() error = %v, want ErrStaleDocsFound", err)
+	}
+}
+
+func TestCheckCommand_StrictMode_ViaConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	docDir := filepath.Join(tmpDir, "doc")
+	os.MkdirAll(docDir, 0755)
+
+	// Create doc without frontmatter
+	doc := `# No Frontmatter
+Some content.
+`
+	os.WriteFile(filepath.Join(docDir, "missing.md"), []byte(doc), 0644)
+
+	// Write config with on_missing_frontmatter: strict
+	cfgContent := "on_missing_frontmatter: strict\n"
+	cfgPath := filepath.Join(tmpDir, ".docrot.yml")
+	os.WriteFile(cfgPath, []byte(cfgContent), 0644)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	configPath = cfgPath
+	format = "text"
+	quiet = false
+	strictMode = false // flag not set; config drives it
+
+	err := runCheck(nil, []string{tmpDir})
+
+	w.Close()
+	os.Stdout = oldStdout
+	configPath = "" // reset
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+
+	if err != ErrMissingFrontmatterFound {
+		t.Errorf("runCheck() error = %v, want ErrMissingFrontmatterFound", err)
+	}
+}
+
 // recentDate returns yesterday's date formatted as YYYY-MM-DD.
 // Using a recent past date ensures docs with a 90d interval are always fresh.
 func recentDate() string {

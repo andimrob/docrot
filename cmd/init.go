@@ -38,7 +38,7 @@ exclude:
   - "**/node_modules/**"
   - "**/vendor/**"
 
-# What to do when a doc has no freshness frontmatter: warn, skip, or fail
+# What to do when a doc has no freshness frontmatter: warn, skip, fail, or strict
 on_missing_frontmatter: warn
 
 # Default freshness settings for add-frontmatter command

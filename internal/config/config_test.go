@@ -120,6 +120,37 @@ func TestLoad_DefaultWorkers_IsZero(t *testing.T) {
 	}
 }
 
+func TestLoad_InvalidOnMissingFrontmatter(t *testing.T) {
+	content := "on_missing_frontmatter: banana\n"
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, ".docrot.yml")
+	if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to create config file: %v", err)
+	}
+
+	_, err := Load(tmpFile)
+	if err == nil {
+		t.Fatal("Load() expected error for invalid on_missing_frontmatter value, got nil")
+	}
+}
+
+func TestLoad_StrictOnMissingFrontmatter(t *testing.T) {
+	content := "on_missing_frontmatter: strict\n"
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, ".docrot.yml")
+	if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to create config file: %v", err)
+	}
+
+	cfg, err := Load(tmpFile)
+	if err != nil {
+		t.Fatalf("Load() error = %v, want nil", err)
+	}
+	if cfg.OnMissingFrontmatter != "strict" {
+		t.Errorf("OnMissingFrontmatter = %v, want strict", cfg.OnMissingFrontmatter)
+	}
+}
+
 func TestLoad_PartialConfig_MergesWithDefaults(t *testing.T) {
 	content := `patterns:
   - "custom/**/*.md"
