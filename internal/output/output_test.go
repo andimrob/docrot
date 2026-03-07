@@ -52,6 +52,47 @@ func TestTextFormatter_QuietMode(t *testing.T) {
 	}
 }
 
+func TestTextFormatter_ChangedFiles(t *testing.T) {
+	results := []freshness.Result{
+		{
+			Path:         "doc/readme.md",
+			Status:       freshness.StatusStale,
+			ChangedFiles: []string{"src/a.go", "src/b.go"},
+		},
+	}
+
+	var buf bytes.Buffer
+	f := NewTextFormatter(&buf, false)
+	f.Write(results)
+
+	output := buf.String()
+	if !strings.Contains(output, "├─ src/a.go") {
+		t.Errorf("Output should contain '├─ src/a.go', got: %s", output)
+	}
+	if !strings.Contains(output, "└─ src/b.go") {
+		t.Errorf("Output should contain '└─ src/b.go', got: %s", output)
+	}
+}
+
+func TestTextFormatter_ReasonOnly(t *testing.T) {
+	results := []freshness.Result{
+		{
+			Path:   "doc/readme.md",
+			Status: freshness.StatusStale,
+			Reason: "Expired on 2024-01-01",
+		},
+	}
+
+	var buf bytes.Buffer
+	f := NewTextFormatter(&buf, false)
+	f.Write(results)
+
+	output := buf.String()
+	if !strings.Contains(output, "└─ Expired on 2024-01-01") {
+		t.Errorf("Output should contain '└─ Expired on 2024-01-01', got: %s", output)
+	}
+}
+
 func TestJSONFormatter(t *testing.T) {
 	results := []freshness.Result{
 		{

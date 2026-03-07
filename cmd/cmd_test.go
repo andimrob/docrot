@@ -1069,6 +1069,88 @@ docrot:
 	}
 }
 
+func TestListCommand_Basic(t *testing.T) {
+	tmpDir := t.TempDir()
+	docDir := filepath.Join(tmpDir, "doc")
+	os.MkdirAll(docDir, 0755)
+
+	doc := fmt.Sprintf(`---
+docrot:
+  last_reviewed: "%s"
+  strategy: interval
+  interval: 90d
+---
+# Fresh Doc
+`, recentDate())
+	os.WriteFile(filepath.Join(docDir, "fresh.md"), []byte(doc), 0644)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	configPath = ""
+	format = "text"
+
+	err := runList(nil, []string{tmpDir})
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	output := buf.String()
+
+	if err != nil {
+		t.Errorf("runList() error = %v", err)
+	}
+	if !strings.Contains(output, "fresh.md") {
+		t.Errorf("Output should contain 'fresh.md', got: %s", output)
+	}
+	if !strings.Contains(output, "fresh") {
+		t.Errorf("Output should contain 'fresh', got: %s", output)
+	}
+}
+
+func TestListCommand_JSONFormat(t *testing.T) {
+	tmpDir := t.TempDir()
+	docDir := filepath.Join(tmpDir, "doc")
+	os.MkdirAll(docDir, 0755)
+
+	doc := fmt.Sprintf(`---
+docrot:
+  last_reviewed: "%s"
+  strategy: interval
+  interval: 90d
+---
+# Fresh Doc
+`, recentDate())
+	os.WriteFile(filepath.Join(docDir, "fresh.md"), []byte(doc), 0644)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	configPath = ""
+	format = "json"
+
+	err := runList(nil, []string{tmpDir})
+
+	w.Close()
+	os.Stdout = oldStdout
+	format = "text" // reset
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	output := buf.String()
+
+	if err != nil {
+		t.Errorf("runList() error = %v", err)
+	}
+	if !strings.Contains(output, `"status"`) {
+		t.Errorf("JSON output should contain 'status' field, got: %s", output)
+	}
+}
+
 // recentDate returns yesterday's date formatted as YYYY-MM-DD.
 // Using a recent past date ensures docs with a 90d interval are always fresh.
 func recentDate() string {
