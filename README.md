@@ -189,3 +189,7 @@ Use `--format json` for machine-readable output:
 | 1 | One or more docs are stale |
 | 2 | Configuration or usage error |
 
+
+## Contributing
+
+Contributions are welcome! Please open an issue first to discuss what you'd like to change.
