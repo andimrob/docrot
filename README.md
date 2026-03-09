@@ -1,5 +1,13 @@
 # docrot
 
+## Table of Contents
+
+- [Installation](#installation)
+- [Usage](#usage)
+- [Configuration](#configuration)
+- [CI Integration](#ci-integration)
+
+
 Detect stale documentation. Keep your docs fresh.
 
 ## Installation
