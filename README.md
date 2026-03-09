@@ -189,3 +189,7 @@ Use `--format json` for machine-readable output:
 | 1 | One or more docs are stale |
 | 2 | Configuration or usage error |
 
+
+## Support
+
+If you encounter issues, please file a bug report via [GitHub Issues](https://github.com/andimrob/docrot/issues).
