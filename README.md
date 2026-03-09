@@ -189,3 +189,7 @@ Use `--format json` for machine-readable output:
 | 1 | One or more docs are stale |
 | 2 | Configuration or usage error |
 
+
+## Badges
+
+[![Go Report Card](https://goreportcard.com/badge/github.com/andimrob/docrot)](https://goreportcard.com/report/github.com/andimrob/docrot)
