@@ -189,3 +189,7 @@ Use `--format json` for machine-readable output:
 | 1 | One or more docs are stale |
 | 2 | Configuration or usage error |
 
+
+## Acknowledgments
+
+Thanks to all contributors and the Go community for their support.
