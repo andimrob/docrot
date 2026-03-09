@@ -1,3 +1,5 @@
+![CI](https://github.com/andimrob/docrot/actions/workflows/ci.yml/badge.svg)
+
 # docrot
 
 Detect stale documentation. Keep your docs fresh.
