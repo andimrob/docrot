@@ -2,6 +2,13 @@
 
 Detect stale documentation. Keep your docs fresh.
 
+## Quick Start
+
+```bash
+go install github.com/andimrob/docrot@latest
+docrot check
+```
+
 ## Installation
 
 ```bash
